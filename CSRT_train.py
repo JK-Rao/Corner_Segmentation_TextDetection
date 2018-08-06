@@ -7,3 +7,4 @@
 from libs.network.factory import get_network
 
 network=get_network('CSTR')
+a=1

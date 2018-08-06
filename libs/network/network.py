@@ -11,7 +11,7 @@ from tensorflow.python.training.moving_averages import assign_moving_average
 def layer(op):
     def layer_decorate(self, *args, **kwargs):
         self.input = self.pre_process_tensor
-        self.pre_process_tensor = op(self, self.input, args[1:], **kwargs)
+        self.pre_process_tensor = op(self, self.input, *args[1:], **kwargs)
         if args[0] == 'save tensor':
             self.layers.append(self.pre_process_tensor)
         return self
@@ -70,7 +70,7 @@ class Network(object):
         return self.layers[index]
 
     @layer
-    def normal(self, x, save_ten, on_train, decay, axes, name_scale, name_offset, name_mean, name_var):
+    def normal(self, x, on_train, decay, axes, name_scale, name_offset, name_mean, name_var):
         # batch-normalization
         shape = x.get_shape().as_list()[-1]
         scale = tf.get_variable(name_scale, shape, initializer=tf.ones_initializer(), trainable=True)
