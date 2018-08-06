@@ -1,0 +1,3 @@
+# Corner_Segmentation_TextDetection
+Multi-Oriented Scene Text Detection via Corner Localization and Region Segmentation<br>
+Coding...
