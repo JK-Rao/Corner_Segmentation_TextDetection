@@ -16,6 +16,10 @@ class Backbone_net(Network):
         self.IM_CHANEL = 3
         self.global_step = tf.Variable(0, trainable=False)
         self.X = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, self.IM_CHANEL], name='X')
+        self.Yc = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, 2], name='Yc')
+        self.Yl = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, 4], name='Yl')
+        self.Ys = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, 1], name='Ys')
+
         self.on_train = tf.placeholder(tf.bool, [], name='on_train')
         self.batch_size = tf.placeholder(tf.int32, name='batch_size')
         self.detect_dict = {}
@@ -73,7 +77,8 @@ class Backbone_net(Network):
             self.setup_corner_point_dect(f_mix)
             self.setup_position_sen_seg(f_mix)
 
-
+    def structure_loss(self):
+        pass
 
     def setup_corner_point_dect(self, f):
         for f_in in f:
@@ -91,14 +96,15 @@ class Backbone_net(Network):
         self.feed(f_sum, 'abandon tensor') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, 'PSS_conv_1_W', 'PSS_conv_1_b') \
             .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
-                  'PSS_1_scale', 'PSS_1_offset', 'PSS_1_mean', 'PSS_1_var') \
+                    'PSS_1_scale', 'PSS_1_offset', 'PSS_1_mean', 'PSS_1_var') \
             .relu('abandon tensor') \
-            .deconv2d('abandon tensor', [self.batch_size,256,256,256], 2, 2, 2, 2, 'PSS_deconv_1_W', 'PSS_deconv_1_b') \
+            .deconv2d('abandon tensor', [self.batch_size, 256, 256, 256], 2, 2, 2, 2, 'PSS_deconv_1_W',
+                      'PSS_deconv_1_b') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, 'PSS_conv_2_W', 'PSS_conv_2_b') \
             .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
-                  'PSS_2_scale', 'PSS_2_offset', 'PSS_2_mean', 'PSS_2_var') \
+                    'PSS_2_scale', 'PSS_2_offset', 'PSS_2_mean', 'PSS_2_var') \
             .relu('abandon tensor') \
-            .deconv2d('save tensor', [self.batch_size,512,512,4], 2, 2, 2, 2, 'PSS_deconv_2_W', 'PSS_deconv_2_b')
+            .deconv2d('save tensor', [self.batch_size, 512, 512, 4], 2, 2, 2, 2, 'PSS_deconv_2_W', 'PSS_deconv_2_b')
         pss_pred = self.layer_tensor_pop()
         self.seg = pss_pred
 
@@ -106,39 +112,40 @@ class Backbone_net(Network):
         self.feed(f, 'abandon tensor') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, name + '_conv1_1_W', name + '_conv1_1_b') \
             .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
-                  name + '_1_1_scale', name + '_1_1_offset', name + '_1_1_mean', name + '_1_1_var') \
+                    name + '_1_1_scale', name + '_1_1_offset', name + '_1_1_mean', name + '_1_1_var') \
             .relu('abandon tensor') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, name + '_conv1_2_W', name + '_conv1_2_b') \
             .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
-                  name + '_1_2_scale', name + '_1_2_offset', name + '_1_2_mean', name + '_1_2_var') \
+                    name + '_1_2_scale', name + '_1_2_offset', name + '_1_2_mean', name + '_1_2_var') \
             .relu('abandon tensor') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, name + '_conv1_3_W', name + '_conv1_3_b') \
             .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
-                  name + '_1_3_scale', name + '_1_3_offset', name + '_1_3_mean', name + '_1_3_var') \
+                    name + '_1_3_scale', name + '_1_3_offset', name + '_1_3_mean', name + '_1_3_var') \
             .relu('save tensor')
         conv = self.layer_tensor_pop()
         self.feed(f, 'abandon tensor') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, name + '_conv2_1_W', name + '_conv2_1_b') \
             .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
-                  name + '_2_1_scale', name + '_2_1_offset', name + '_2_1_mean', name + '_2_1_var') \
+                    name + '_2_1_scale', name + '_2_1_offset', name + '_2_1_mean', name + '_2_1_var') \
             .relu('save tensor')
         conv_short = self.layer_tensor_pop()
 
         self.feed(conv + conv_short, 'abandon tensor') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, name + '_conv3_W', name + '_conv3_b') \
             .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
-                  name + '_3_scale', name + '_3_offset', name + '_3_mean', name + '_3_var') \
+                    name + '_3_scale', name + '_3_offset', name + '_3_mean', name + '_3_var') \
             .relu('save tensor') \
             .conv2d('abandon tensor', default_box_num * 4 * 2, 1, 1, 1, 1, name + '_conv4_top_W', name + '_conv4_top_b') \
             .normal('save tensor', self.on_train, 0.5, [0, 1, 2],
-                  name + '_4_top_scale', name + '_4_top_offset', name + '_4_top_mean', name + '_4_top_var')
+                    name + '_4_top_scale', name + '_4_top_offset', name + '_4_top_mean', name + '_4_top_var')
         scor_pred = self.layer_tensor_pop()
 
         self.feed(self.layer_tensor_pop(), 'abandon tensor') \
             .conv2d('abandon tensor', default_box_num * 4 * 4, 1, 1, 1, 1, name + '_conv4_bottom_W',
                     name + '_conv4_bottom_b') \
             .normal('save tensor', self.on_train, 0.5, [0, 1, 2],
-                  name + '_4_bottom_scale', name + '_4_bottom_offset', name + '_4_bottom_mean', name + '_4_bottom_var')
+                    name + '_4_bottom_scale', name + '_4_bottom_offset', name + '_4_bottom_mean',
+                    name + '_4_bottom_var')
 
         offs_pred = self.layer_tensor_pop()
 
