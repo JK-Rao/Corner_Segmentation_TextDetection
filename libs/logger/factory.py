@@ -15,5 +15,4 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
     elif model_name=='CPD':
         CPD_mat=sio.loadmat('./model/gt_model/gt.mat')
         gt_array=CPD_mat['wordBB'][0][0]
-        ground_truth2feature_map(gt_array)
         return ground_truth2feature_map(gt_array)

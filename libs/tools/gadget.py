@@ -7,6 +7,8 @@
 import os
 import numpy as np
 import shutil
+import cv2
+import copy
 
 
 def mk_dir(path):
@@ -23,6 +25,7 @@ def transform_file(source_file, obj_path, obj_name=None):
     shutil.copy(source_file, os.path.join(obj_path, file_name))
 
 
+# point format:[x_left,y_top,x_right,y_bottom]
 def calcul_iou(ltrb_point1s, ltrb_point2s):
     x = [ltrb_point1s[0], ltrb_point1s[2], ltrb_point2s[0], ltrb_point2s[2]]
     y = [ltrb_point1s[1], ltrb_point1s[3], ltrb_point2s[1], ltrb_point2s[3]]
@@ -84,14 +87,55 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
     return cls_map, reg_map
 
 
+# gt_array:3d tensor shape like [2,4,?]
+# seg_map:4d tensor shape like [1,512,512,4]
+def project_feature_map_seg(gt_array, seg_map):
+    for point_index in range(gt_array.shape[-1]):
+        point_corner = gt_array[:, :, point_index].T
+        assert point_corner.shape[0] == 4, 'AmountError: incorrect number in point corner.'
+        full_corner = copy.deepcopy(point_corner)
+        for i in range(4):
+            before_point = point_corner[i, :]
+            after_point = point_corner[0, :] if i == 3 else point_corner[i + 1, :]
+            center_point = np.array([(before_point[0] + after_point[0]) / 2,
+                                     (before_point[1] + after_point[1]) / 2]).reshape([1, 2]).astype(np.int32)
+            full_corner = np.insert(full_corner, i * 2 + 1, center_point, axis=0)
+        center_point = np.array([(full_corner[1, 0] + full_corner[5, 0]) / 2,
+                                 (full_corner[3, 1] + full_corner[7, 1]) / 2]).astype(np.int32)
+
+        points_list = list()
+        points_list.append(full_corner[0].tolist() + full_corner[1].tolist() + center_point.tolist() + full_corner[
+            -1].tolist())
+        points_list.append(full_corner[1].tolist() + full_corner[2].tolist() + full_corner[
+            3].tolist() + center_point.tolist())
+        points_list.append(center_point.tolist() + full_corner[3].tolist() + full_corner[4].tolist() + full_corner[
+            5].tolist())
+        points_list.append(full_corner[-1].tolist() + center_point.tolist() + full_corner[5].tolist() + full_corner[
+            6].tolist())
+        for i in range(4):
+            seg_map[0, :, :, i] = cv2.drawContours(copy.deepcopy(seg_map[0, :, :, i]),
+                                                   [np.array(points_list[i]).reshape([4, 2]).astype(np.int32)],
+                                                   0, 1., cv2.FILLED)
+    return seg_map
+
+
 if __name__ == '__main__':
-    cls_mask = np.ones([1, 64, 64, 1], dtype=np.float32)
-    for i in range(47):
-        if i % 2 == 0:
-            cls_mask = np.append(cls_mask, np.zeros([1, 64, 64, 1], dtype=np.float32), axis=3)
-        else:
-            cls_mask = np.append(cls_mask, np.ones([1, 64, 64, 1], dtype=np.float32), axis=3)
-    reg_mask = np.zeros([1, 64, 64, 96], dtype=np.float32)
-    cls_mask, reg_mask = project_feature_map([153.57, 72.53, 23.367, 23.367], cls_mask, reg_mask, [20, 24, 28, 32], 8,
-                                             1)
+    # cls_mask = np.ones([1, 64, 64, 1], dtype=np.float32)
+    # for i in range(47):
+    #     if i % 2 == 0:
+    #         cls_mask = np.append(cls_mask, np.zeros([1, 64, 64, 1], dtype=np.float32), axis=3)
+    #     else:
+    #         cls_mask = np.append(cls_mask, np.ones([1, 64, 64, 1], dtype=np.float32), axis=3)
+    # reg_mask = np.zeros([1, 64, 64, 96], dtype=np.float32)
+    # cls_mask, reg_mask = project_feature_map([153.57, 72.53, 23.367, 23.367], cls_mask, reg_mask,
+    #                                          [20, 24, 28, 32], 8, 1)
+
+    seg_map = np.zeros([1, 512, 512, 4], dtype=np.float32)
+    gt_array = np.array([[10.1, 30, 30, 10], [10, 10, 30, 30]]).reshape([2, 4, 1])
+    seg_map = project_feature_map_seg(gt_array, seg_map)
+    cv2.imshow('test1', seg_map[0, :, :, 0])
+    cv2.imshow('test2', seg_map[0, :, :, 1])
+    cv2.imshow('test3', seg_map[0, :, :, 2])
+    cv2.imshow('test4', seg_map[0, :, :, 3])
+    cv2.waitKey()
     a = 1
