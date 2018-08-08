@@ -6,6 +6,7 @@
 
 import tensorflow as tf
 from .network import Network
+import numpy as np
 
 
 class Backbone_net(Network):
@@ -16,9 +17,9 @@ class Backbone_net(Network):
         self.IM_CHANEL = 3
         self.global_step = tf.Variable(0, trainable=False)
         self.X = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, self.IM_CHANEL], name='X')
-        self.Yc = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, 2], name='Yc')
-        self.Yl = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, 4], name='Yl')
-        self.Ys = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, 1], name='Ys')
+        self.Ycls = tf.placeholder(tf.float32, shape=[None, 2], name='Ycls')
+        self.Yreg = tf.placeholder(tf.float32, shape=[None, 4], name='Yreg')
+        self.Yseg = tf.placeholder(tf.float32, shape=[None, 1], name='Yseg')
 
         self.on_train = tf.placeholder(tf.bool, [], name='on_train')
         self.batch_size = tf.placeholder(tf.int32, name='batch_size')
@@ -77,8 +78,47 @@ class Backbone_net(Network):
             self.setup_corner_point_dect(f_mix)
             self.setup_position_sen_seg(f_mix)
 
+    def flatten_tensor(self, tensor):
+        return tf.reshape(tensor, [-1, tensor.get_shape().as_list()[-1]])
+
     def structure_loss(self):
-        pass
+        self.feed(self.detect_dict['f11_CPD'], 'flatten tensor x2') \
+            .concat_tensor(self.detect_dict['f10_CPD'], 2) \
+            .concat_tensor(self.detect_dict['f9_CPD'], 2) \
+            .concat_tensor(self.detect_dict['f8_CPD'], 2) \
+            .concat_tensor(self.detect_dict['f7_CPD'], 2) \
+            .concat_tensor(self.detect_dict['f4_CPD'], 2) \
+            .concat_tensor(self.detect_dict['f3_CPD'], 2)
+        flatten_pred_cls = self.pre_process_tensor
+        self.feed(self.off_dict['f11_CPD'], 'flatten tensor x4') \
+            .concat_tensor(self.off_dict['f10_CPD'], 4) \
+            .concat_tensor(self.off_dict['f9_CPD'], 4) \
+            .concat_tensor(self.off_dict['f8_CPD'], 4) \
+            .concat_tensor(self.off_dict['f7_CPD'], 4) \
+            .concat_tensor(self.off_dict['f4_CPD'], 4) \
+            .concat_tensor(self.off_dict['f3_CPD'], 4)
+        flatten_pred_reg = self.pre_process_tensor
+
+        OHEM_mask = self.Ycls[:, 1] > 1
+        OHEM_mask = tf.logical_or(OHEM_mask, self.Ycls[:, 1] >= 1)
+        OHEM_mask = tf.reshape(tf.cast(OHEM_mask, dtype=tf.int32), shape=[-1, 1])
+        pos_num = tf.reduce_sum(OHEM_mask)
+        neg_num = pos_num * 3
+        val, index = tf.nn.top_k(flatten_pred_cls[:, 1], k=neg_num)
+        OHEM_mask_cls = tf.cast(OHEM_mask, dtype=tf.bool)
+        OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, flatten_pred_cls[:, 1] >= val[-1])
+        OHEM_mask_cls = tf.cast(OHEM_mask_cls, dtype=tf.float32)
+        # cls loss
+        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls), axis=[1], keep_dims=True) * OHEM_mask_cls
+        # reg loss
+        delta_reg = tf.abs(flatten_pred_reg - self.Yreg)
+        OHEM_mask = tf.cast(OHEM_mask, dtype=tf.float32)
+        smooth_l1_sign = tf.cast(tf.reshape(delta_reg < 1, shape=[-1, 1]), dtype=tf.float32)
+        loss_reg = tf.reduce_sum(0.5 * tf.pow(delta_reg, 2) * smooth_l1_sign + \
+                                 (delta_reg - 0.5) * (1 - smooth_l1_sign), axis=[1], keep_dims=True) * OHEM_mask
+        # seg loss
+
+        a = 1
 
     def setup_corner_point_dect(self, f):
         for f_in in f:

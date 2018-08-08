@@ -4,7 +4,6 @@
 # @Software  PyCharm
 # @Author    JK.Rao
 
-import tensorflow as tf
 import numpy as np
 from .data_pipeline import TfReader
 from .data_pipeline import TfWriter

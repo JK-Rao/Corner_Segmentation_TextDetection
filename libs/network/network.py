@@ -19,6 +19,16 @@ def layer(op):
     return layer_decorate
 
 
+def flattener(op):
+    def tensor_flattener(self, *args):
+        concat_tensor = tf.reshape(args[0], shape=[-1,args[1]])
+        self.input = self.pre_process_tensor
+        self.pre_process_tensor = op(self, self.input, concat_tensor)
+        return self
+
+    return tensor_flattener
+
+
 class Network(object):
     def __init__(self, net_name):
         self.net_name = net_name
@@ -55,6 +65,12 @@ class Network(object):
         self.pre_process_tensor = x
         if save_tensor == 'save tensor':
             self.layers.append(self.pre_process_tensor)
+        elif save_tensor == 'flatten tensor x2':
+            self.pre_process_tensor = tf.reshape(self.pre_process_tensor,
+                                                 shape=[-1, 2])
+        elif save_tensor == 'flatten tensor x4':
+            self.pre_process_tensor = tf.reshape(self.pre_process_tensor,
+                                                 shape=[-1, 4])
         return self
 
     def weight_var(self, shape, name):
@@ -68,6 +84,10 @@ class Network(object):
 
     def layer_tensor_demand(self, index=-1):
         return self.layers[index]
+
+    @flattener
+    def concat_tensor(self, tensor_org, tensor_cc):
+        return tf.concat([tensor_org, tensor_cc], axis=0)
 
     @layer
     def normal(self, x, on_train, decay, axes, name_scale, name_offset, name_mean, name_var):
