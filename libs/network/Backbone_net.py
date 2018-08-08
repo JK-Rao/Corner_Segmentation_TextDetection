@@ -98,6 +98,11 @@ class Backbone_net(Network):
             .concat_tensor(self.off_dict['f4_CPD'], 4) \
             .concat_tensor(self.off_dict['f3_CPD'], 4)
         flatten_pred_reg = self.pre_process_tensor
+        self.feed(self.seg[0], 'flatten tensor x4') \
+            .concat_tensor(self.seg[1], 4) \
+            .concat_tensor(self.seg[2], 4) \
+            .concat_tensor(self.seg[3], 4)
+        flatten_pred_seg = self.pre_process_tensor
 
         OHEM_mask = self.Ycls[:, 1] > 1
         OHEM_mask = tf.logical_or(OHEM_mask, self.Ycls[:, 1] >= 1)
@@ -117,6 +122,7 @@ class Backbone_net(Network):
         loss_reg = tf.reduce_sum(0.5 * tf.pow(delta_reg, 2) * smooth_l1_sign + \
                                  (delta_reg - 0.5) * (1 - smooth_l1_sign), axis=[1], keep_dims=True) * OHEM_mask
         # seg loss
+        loss_seg = 1 - tf.reduce_sum(2 * self.Yseg * flatten_pred_seg) / tf.reduce_sum(self.Yseg + flatten_pred_seg)
 
         a = 1
 
