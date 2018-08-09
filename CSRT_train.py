@@ -6,6 +6,7 @@
 
 from libs.network.factory import get_network
 
-network=get_network('CSTR')
-network.structure_loss()
-a=1
+network = get_network('CSTR')
+loss_dict = network.structure_loss()
+opti = network.define_optimizer(loss_dict)
+a = 1

@@ -21,7 +21,7 @@ def layer(op):
 
 def flattener(op):
     def tensor_flattener(self, *args):
-        concat_tensor = tf.reshape(args[0], shape=[-1,args[1]])
+        concat_tensor = tf.reshape(args[0], shape=[-1, args[1]])
         self.input = self.pre_process_tensor
         self.pre_process_tensor = op(self, self.input, concat_tensor)
         return self
@@ -138,6 +138,10 @@ class Network(object):
         w = self.weight_var([x.get_shape().as_list()[-1], output_dim], name=name_W)
         fc = tf.matmul(x, w) + self.bias_var([output_dim], name=name_b)
         return fc
+
+    @layer
+    def max_pool2d(self, x, k_h, k_w, d_h, d_w, padding='SAME'):
+        return tf.nn.max_pool(x, [1, k_h, k_w, 1], [1, d_h, d_w, 1], padding)
 
     @layer
     def reshape(self, x, out_size):

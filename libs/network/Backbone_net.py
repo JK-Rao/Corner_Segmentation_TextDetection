@@ -6,11 +6,16 @@
 
 import tensorflow as tf
 from .network import Network
+import tensorflow.contrib.slim as slim
+import tensorflow.contrib.slim.nets
+import tensorflow.contrib.layers as layers
+import os
 import numpy as np
 
 
 class Backbone_net(Network):
     def __init__(self):
+        tf.reset_default_graph()
         Network.__init__(self, 'backbone')
         self.IM_HEIGHT = 512
         self.IM_WIDTH = 512
@@ -125,6 +130,18 @@ class Backbone_net(Network):
         loss_seg = 1 - tf.reduce_sum(2 * self.Yseg * flatten_pred_seg) / tf.reduce_sum(self.Yseg + flatten_pred_seg)
 
         a = 1
+        return {'cls loss': loss_cls,
+                'reg loss': loss_reg,
+                'seg loss': loss_seg}
+
+    def define_optimizer(self, loss_dict):
+        backbone_vars = self.get_trainable_var('backbone')
+        import_vars = self.get_trainable_var('Import')
+        loss = tf.reduce_sum(loss_dict['cls loss']) + tf.reduce_sum(loss_dict['reg loss']) + loss_dict['seg loss']
+        optimizer = tf.train.AdamOptimizer(0.0001).minimize(loss,
+                                                            global_step=self.global_step,
+                                                            var_list=vars)
+        return optimizer
 
     def setup_corner_point_dect(self, f):
         for f_in in f:
@@ -224,17 +241,52 @@ class Backbone_net(Network):
         return self.layer_tensor_demand()
 
     def load_vgg_model(self):
-        with open("model/vgg16-20160129.tfmodel", mode='rb') as f:
-            fileContent = f.read()
-        images = tf.placeholder("float", [None, 512, 512, 3])
-        graph_def = tf.GraphDef()
-        graph_def.ParseFromString(fileContent)
-        tf.import_graph_def(graph_def, input_map={"images": images})
         graph = tf.get_default_graph()
 
-        conv3_3 = graph.get_tensor_by_name('import/conv3_3/Relu:0')
-        conv4_3 = graph.get_tensor_by_name('import/conv4_3/Relu:0')
-        conv5_3 = graph.get_tensor_by_name('import/conv5_3/Relu:0')
-        self.layers.append(conv3_3)
-        self.layers.append(conv4_3)
-        return conv5_3
+        with tf.variable_scope('vgg_16'):
+            self.feed(self.X, 'abandon tensor') \
+                .conv2d('abandon tensor', 64, 3, 3, 1, 1, 'conv1/conv1_1/weights', 'conv1/conv1_1/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 64, 3, 3, 1, 1, 'conv1/conv1_2/weights', 'conv1/conv1_2/biases') \
+                .relu('abandon tensor') \
+                .max_pool2d('abandon tensor', 2, 2, 2, 2) \
+                .conv2d('abandon tensor', 128, 3, 3, 1, 1, 'conv2/conv2_1/weights', 'conv2/conv2_1/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 128, 3, 3, 1, 1, 'conv2/conv2_2/weights', 'conv2/conv2_2/biases') \
+                .relu('abandon tensor') \
+                .max_pool2d('abandon tensor', 2, 2, 2, 2) \
+                .conv2d('abandon tensor', 256, 3, 3, 1, 1, 'conv3/conv3_1/weights', 'conv3/conv3_1/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 256, 3, 3, 1, 1, 'conv3/conv3_2/weights', 'conv3/conv3_2/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 256, 3, 3, 1, 1, 'conv3/conv3_3/weights', 'conv3/conv3_3/biases') \
+                .relu('save tensor') \
+                .max_pool2d('abandon tensor', 2, 2, 2, 2) \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv4/conv4_1/weights', 'conv4/conv4_1/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv4/conv4_2/weights', 'conv4/conv4_2/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv4/conv4_3/weights', 'conv4/conv4_3/biases') \
+                .relu('save tensor') \
+                .max_pool2d('abandon tensor', 2, 2, 2, 2) \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_1/weights', 'conv5/conv5_1/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_2/weights', 'conv5/conv5_2/biases') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_3/weights', 'conv5/conv5_3/biases') \
+                .relu('save tensor')
+
+        #
+
+        model_path = 'model/vgg_16.ckpt'
+        assert (os.path.isfile(model_path))
+
+        variables_to_restore = tf.contrib.framework.get_variables_to_restore()
+        variables_to_restore.pop(0)
+        init_vgg = tf.contrib.framework.assign_from_checkpoint_fn(model_path, variables_to_restore)
+
+        with tf.Session(graph=graph) as sess:
+            sess.run(tf.global_variables_initializer())
+            init_vgg(sess)
+
+        return self.layer_tensor_demand()
