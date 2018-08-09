@@ -60,7 +60,7 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
                         int(np.ceil((bottom + max_scale // 2) / stride))):
         for step_W in range(int(np.floor((left - max_scale // 2) / stride)),
                             int(np.ceil((right + max_scale // 2) / stride))):
-            if step_H < 0 or step_W < 0 or step_H > height or step_W > width:
+            if step_H < 0 or step_W < 0 or step_H > height-1 or step_W > width-1:
                 continue
             for scal_index, scal in enumerate(scale):
                 default_box = [int(step_W * stride + stride / 2 - scal / 2),

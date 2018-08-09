@@ -136,11 +136,12 @@ class Backbone_net(Network):
 
     def define_optimizer(self, loss_dict):
         backbone_vars = self.get_trainable_var('backbone')
-        import_vars = self.get_trainable_var('Import')
+        vgg_vars = self.get_trainable_var('vgg_16')
+        total_vars = backbone_vars + vgg_vars
         loss = tf.reduce_sum(loss_dict['cls loss']) + tf.reduce_sum(loss_dict['reg loss']) + loss_dict['seg loss']
         optimizer = tf.train.AdamOptimizer(0.0001).minimize(loss,
                                                             global_step=self.global_step,
-                                                            var_list=vars)
+                                                            var_list=total_vars)
         return optimizer
 
     def setup_corner_point_dect(self, f):
@@ -240,9 +241,11 @@ class Backbone_net(Network):
             .relu('save tensor')
         return self.layer_tensor_demand()
 
-    def load_vgg_model(self):
-        graph = tf.get_default_graph()
+    def get_graph(self):
+        return tf.get_default_graph()
 
+    def load_vgg_model(self):
+        graph = self.get_graph()
         with tf.variable_scope('vgg_16'):
             self.feed(self.X, 'abandon tensor') \
                 .conv2d('abandon tensor', 64, 3, 3, 1, 1, 'conv1/conv1_1/weights', 'conv1/conv1_1/biases') \
@@ -275,9 +278,6 @@ class Backbone_net(Network):
                 .relu('abandon tensor') \
                 .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_3/weights', 'conv5/conv5_3/biases') \
                 .relu('save tensor')
-
-        #
-
         model_path = 'model/vgg_16.ckpt'
         assert (os.path.isfile(model_path))
 

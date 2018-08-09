@@ -10,8 +10,8 @@ import cv2
 
 
 class AssemblyLine(object):
-    def __init__(self, config, network):
-        self.sess = tf.Session(config=config)
+    def __init__(self, config, graph, network):
+        self.sess = tf.Session(graph=graph, config=config)
         self.network = network
         self.iter_num = 0
         self.summary_writer = None
@@ -51,7 +51,7 @@ class AssemblyLine(object):
         self.sess.as_default()
         saver.save(self.sess, save_path_name, write_meta_graph=write_meta_graph)
 
-    def restore_model(self, model_name,parameter_name):
+    def restore_model(self, model_name, parameter_name):
         saver = tf.train.import_meta_graph(model_name)
         graph = tf.get_default_graph()
         self.sess.run(tf.global_variables_initializer())

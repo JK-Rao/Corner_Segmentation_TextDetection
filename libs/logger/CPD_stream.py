@@ -59,31 +59,32 @@ def gt_array2gt_rects(gt_array):
     return gt_rects
 
 
-gt_cls_mask_f11 = init_CPD_mask([1, 2, 2, 1], 32, 'cls')
-gt_cls_mask_f10 = init_CPD_mask([1, 4, 4, 1], 32, 'cls')
-gt_cls_mask_f9 = init_CPD_mask([1, 8, 8, 1], 32, 'cls')
-gt_cls_mask_f8 = init_CPD_mask([1, 16, 16, 1], 32, 'cls')
-gt_cls_mask_f7 = init_CPD_mask([1, 32, 32, 1], 32, 'cls')
-gt_cls_mask_f4 = init_CPD_mask([1, 64, 64, 1], 32, 'cls')
-gt_cls_mask_f3 = init_CPD_mask([1, 128, 128, 1], 48, 'cls')
 
-gt_reg_mask_f11 = init_CPD_mask([1, 2, 2, 1], 64, 'reg')
-gt_reg_mask_f10 = init_CPD_mask([1, 4, 4, 1], 64, 'reg')
-gt_reg_mask_f9 = init_CPD_mask([1, 8, 8, 1], 64, 'reg')
-gt_reg_mask_f8 = init_CPD_mask([1, 16, 16, 1], 64, 'reg')
-gt_reg_mask_f7 = init_CPD_mask([1, 32, 32, 1], 64, 'reg')
-gt_reg_mask_f4 = init_CPD_mask([1, 64, 64, 1], 64, 'reg')
-gt_reg_mask_f3 = init_CPD_mask([1, 128, 128, 1], 96, 'reg')
-
-gt_seg_mask = init_CPD_mask([1, 512, 512, 1], 4, 'seg')
 
 
 # gt_array:A 3d tensor,[2,4,None]
 def ground_truth2feature_map(gt_array):
     t1 = time.time()
-    global gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9, gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, \
-        gt_cls_mask_f3, gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9, gt_reg_mask_f8, gt_reg_mask_f7, gt_reg_mask_f4, \
-        gt_reg_mask_f3, gt_seg_mask
+    # global gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9, gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, \
+    #     gt_cls_mask_f3, gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9, gt_reg_mask_f8, gt_reg_mask_f7, gt_reg_mask_f4, \
+    #     gt_reg_mask_f3, gt_seg_mask
+    gt_cls_mask_f11 = init_CPD_mask([1, 2, 2, 1], 32, 'cls')
+    gt_cls_mask_f10 = init_CPD_mask([1, 4, 4, 1], 32, 'cls')
+    gt_cls_mask_f9 = init_CPD_mask([1, 8, 8, 1], 32, 'cls')
+    gt_cls_mask_f8 = init_CPD_mask([1, 16, 16, 1], 32, 'cls')
+    gt_cls_mask_f7 = init_CPD_mask([1, 32, 32, 1], 32, 'cls')
+    gt_cls_mask_f4 = init_CPD_mask([1, 64, 64, 1], 32, 'cls')
+    gt_cls_mask_f3 = init_CPD_mask([1, 128, 128, 1], 48, 'cls')
+
+    gt_reg_mask_f11 = init_CPD_mask([1, 2, 2, 1], 64, 'reg')
+    gt_reg_mask_f10 = init_CPD_mask([1, 4, 4, 1], 64, 'reg')
+    gt_reg_mask_f9 = init_CPD_mask([1, 8, 8, 1], 64, 'reg')
+    gt_reg_mask_f8 = init_CPD_mask([1, 16, 16, 1], 64, 'reg')
+    gt_reg_mask_f7 = init_CPD_mask([1, 32, 32, 1], 64, 'reg')
+    gt_reg_mask_f4 = init_CPD_mask([1, 64, 64, 1], 64, 'reg')
+    gt_reg_mask_f3 = init_CPD_mask([1, 128, 128, 1], 96, 'reg')
+
+    gt_seg_mask = init_CPD_mask([1, 512, 512, 1], 4, 'seg')
     gt_rects = gt_array2gt_rects(gt_array)
     for gt_rect in gt_rects:
         gt_cls_mask_f11, gt_reg_mask_f11 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f11, gt_reg_mask_f11,
