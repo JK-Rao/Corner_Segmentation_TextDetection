@@ -48,7 +48,7 @@ def flatten_concat(stand_data):
 class Backbone_line(AssemblyLine):
     def __init__(self, network):
         AssemblyLine.__init__(self, self.get_config(), network.get_graph(), network)
-        self.batch_size = 4
+        self.batch_size = 8
         self.val_size = 1
         self.IMG_CHANEL = self.network.IM_CHANEL
 
