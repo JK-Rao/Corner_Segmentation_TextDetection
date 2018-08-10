@@ -157,3 +157,7 @@ class Network(object):
     @layer
     def sigmoid(self, x):
         return tf.nn.sigmoid(x)
+
+    @layer
+    def softmax(self, x):
+        return tf.nn.softmax(x)

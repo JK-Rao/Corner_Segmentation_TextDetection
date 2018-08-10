@@ -121,7 +121,8 @@ class Backbone_net(Network):
         OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, cls_pos >= val[-1])
         OHEM_mask_cls = tf.cast(OHEM_mask_cls, dtype=tf.float32)
         # cls loss
-        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls), axis=[1], keep_dims=True) * OHEM_mask_cls
+        epsilon=1e-8
+        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls+epsilon), axis=[1], keep_dims=True) * OHEM_mask_cls
         # reg loss
         delta_reg = tf.abs(flatten_pred_reg - self.Yreg)
         OHEM_mask = tf.cast(OHEM_mask, dtype=tf.float32)
@@ -131,7 +132,6 @@ class Backbone_net(Network):
         # seg loss
         loss_seg = 1 - tf.reduce_sum(2 * self.Yseg * flatten_pred_seg) / tf.reduce_sum(self.Yseg + flatten_pred_seg)
 
-        a = 1
         return {'cls loss': loss_cls,
                 'reg loss': loss_reg,
                 'seg loss': loss_seg}
@@ -202,8 +202,10 @@ class Backbone_net(Network):
                     name + '_3_scale', name + '_3_offset', name + '_3_mean', name + '_3_var') \
             .relu('save tensor') \
             .conv2d('abandon tensor', default_box_num * 4 * 2, 1, 1, 1, 1, name + '_conv4_top_W', name + '_conv4_top_b') \
-            .normal('save tensor', self.on_train, 0.5, [0, 1, 2],
-                    name + '_4_top_scale', name + '_4_top_offset', name + '_4_top_mean', name + '_4_top_var')
+            .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2],
+                    name + '_4_top_scale', name + '_4_top_offset', name + '_4_top_mean', name + '_4_top_var')\
+            .softmax('save tensor')
+
         scor_pred = self.layer_tensor_pop()
 
         self.feed(self.layer_tensor_pop(), 'abandon tensor') \
