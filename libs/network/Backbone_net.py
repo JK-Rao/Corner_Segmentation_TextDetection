@@ -90,6 +90,9 @@ class Backbone_net(Network):
     def flatten_tensor(self, tensor):
         return tf.reshape(tensor, [-1, tensor.get_shape().as_list()[-1]])
 
+    def get_pred(self):
+        return self.detect_dict,self.off_dict,self.seg
+
     def structure_loss(self):
         self.feed(self.detect_dict['f11_CPD'], 'flatten tensor x2') \
             .concat_tensor(self.detect_dict['f10_CPD'], 2) \

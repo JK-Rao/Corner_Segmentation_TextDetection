@@ -49,7 +49,7 @@ class Backbone_line(AssemblyLine):
     def __init__(self, network):
         AssemblyLine.__init__(self, self.get_config(), network.get_graph(), network)
         self.batch_size = 4
-        self.val_size = 4
+        self.val_size = 1
         self.IMG_CHANEL = self.network.IM_CHANEL
 
     @staticmethod
@@ -64,11 +64,12 @@ class Backbone_line(AssemblyLine):
         self.sess.run(tf.global_variables_initializer())
         init_vgg16 = self.network.vgg16_initializer
         init_vgg16(self.sess)
-        for iter in range(1000):
+        for iter in range(1):
             if iter % 10 == 0:
-                t0=time.time()
                 Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
-                                                                          self.batch_size * 1000 + iter * self.val_size + self.val_size])
+                                                                          self.batch_size * 1000 + iter * self.val_size \
+                                                                          + self.val_size])
+                print('val')
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
                 los_cls, los_reg, los_seg \
                     = self.sess.run([tf.reduce_mean(loss_dict['cls loss']),
@@ -81,8 +82,29 @@ class Backbone_line(AssemblyLine):
                                                self.network.on_train: False,
                                                self.network.batch_size: self.val_size
                                                })
-                print('iter step:%d cls loss:%f,reg loss:%f,seg loss:%f spend:%f' % (iter, los_cls, los_reg, los_seg,
-                                                                                     time.time()-t0))
+                print('iter step:%d cls loss:%f,reg loss:%f,seg loss:%f' % (iter, los_cls, los_reg, los_seg))
+
+                t1 = time.time()
+                self.sess.run([self.network.get_pred()[2],
+                               self.network.get_pred()[0]['f11_CPD'],
+                               self.network.get_pred()[1]['f11_CPD'],
+                               self.network.get_pred()[0]['f10_CPD'],
+                               self.network.get_pred()[1]['f10_CPD'],
+                               self.network.get_pred()[0]['f9_CPD'],
+                               self.network.get_pred()[1]['f9_CPD'],
+                               self.network.get_pred()[0]['f8_CPD'],
+                               self.network.get_pred()[1]['f8_CPD'],
+                               self.network.get_pred()[0]['f7_CPD'],
+                               self.network.get_pred()[1]['f7_CPD'],
+                               self.network.get_pred()[0]['f4_CPD'],
+                               self.network.get_pred()[1]['f4_CPD'],
+                               self.network.get_pred()[0]['f3_CPD'],
+                               self.network.get_pred()[1]['f3_CPD']],
+                              feed_dict={self.network.X: X_val_mb,
+                                         self.network.on_train: False,
+                                         self.network.batch_size: self.val_size
+                                         })
+                print('spend %f' % (time.time() - t1))
 
             Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size,
                                                                           iter * self.batch_size + self.batch_size])
@@ -95,4 +117,3 @@ class Backbone_line(AssemblyLine):
                                                 self.network.on_train: True,
                                                 self.network.batch_size: self.batch_size
                                                 })
-
