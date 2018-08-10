@@ -5,8 +5,10 @@
 # @Author    JK.Rao
 
 from libs.network.factory import get_network
+from libs.crafting_table.factory import train_model
 
-network = get_network('CSTR')
-loss_dict = network.structure_loss()
-opti = network.define_optimizer(loss_dict)
+# network = get_network('CSTR')
+# loss_dict = network.structure_loss()
+# opti = network.define_optimizer(loss_dict)
+train_model('CSTR')
 a = 1

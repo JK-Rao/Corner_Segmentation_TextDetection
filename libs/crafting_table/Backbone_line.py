@@ -8,8 +8,7 @@ from .assembly_line import AssemblyLine
 from ..logger.factory import get_sample_tensor
 import tensorflow as tf
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
+import time
 import cv2
 from os.path import join
 import os
@@ -49,22 +48,44 @@ def flatten_concat(stand_data):
 class Backbone_line(AssemblyLine):
     def __init__(self, network):
         AssemblyLine.__init__(self, self.get_config(), network.get_graph(), network)
-        self.batch_size = 24
-        self.val_size = 24
-        self.IMG_CHANEL = self.network.IMG_CHANEL
+        self.batch_size = 4
+        self.val_size = 4
+        self.IMG_CHANEL = self.network.IM_CHANEL
 
     @staticmethod
     def get_config():
         config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
+        # config.gpu_options.allow_growth = True
         return config
 
     def structure_train_context(self):
         loss_dict = self.network.structure_loss()
         opti_dict = self.network.define_optimizer(loss_dict)
         self.sess.run(tf.global_variables_initializer())
+        init_vgg16 = self.network.vgg16_initializer
+        init_vgg16(self.sess)
         for iter in range(1000):
-            Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * 24, iter * 24 + 24])
+            if iter % 10 == 0:
+                t0=time.time()
+                Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
+                                                                          self.batch_size * 1000 + iter * self.val_size + self.val_size])
+                Y_val_mb_flatten = flatten_concat(Y_val_mb)
+                los_cls, los_reg, los_seg \
+                    = self.sess.run([tf.reduce_mean(loss_dict['cls loss']),
+                                     tf.reduce_mean(loss_dict['reg loss']),
+                                     tf.reduce_mean(loss_dict['seg loss'])],
+                                    feed_dict={self.network.X: X_val_mb,
+                                               self.network.Ycls: Y_val_mb_flatten['cls_data'],
+                                               self.network.Yreg: Y_val_mb_flatten['reg_data'],
+                                               self.network.Yseg: Y_val_mb_flatten['seg_data'],
+                                               self.network.on_train: False,
+                                               self.network.batch_size: self.val_size
+                                               })
+                print('iter step:%d cls loss:%f,reg loss:%f,seg loss:%f spend:%f' % (iter, los_cls, los_reg, los_seg,
+                                                                                     time.time()-t0))
+
+            Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size,
+                                                                          iter * self.batch_size + self.batch_size])
             Y_tain_mb_flatten = flatten_concat(Y_train_mb)
 
             self.sess.run(opti_dict, feed_dict={self.network.X: X_train_mb,
@@ -72,18 +93,6 @@ class Backbone_line(AssemblyLine):
                                                 self.network.Yreg: Y_tain_mb_flatten['reg_data'],
                                                 self.network.Yseg: Y_tain_mb_flatten['seg_data'],
                                                 self.network.on_train: True,
-                                                self.network.batch_size: 24
+                                                self.network.batch_size: self.batch_size
                                                 })
-            if iter % 10 == 0:
-                Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[24 * 1000 + iter * 10,
-                                                                          24 * 1000 + iter * 10 + 10])
-                Y_val_mb_flatten = flatten_concat(Y_train_mb)
-                los_cls, los_reg, los_seg \
-                    = self.sess.run(list(loss_dict.values), feed_dict={self.network.X: X_val_mb,
-                                                                       self.network.Ycls: Y_val_mb_flatten['cls_data'],
-                                                                       self.network.Yreg: Y_val_mb_flatten['reg_data'],
-                                                                       self.network.Yseg: Y_val_mb_flatten['seg_data'],
-                                                                       self.network.on_train: False,
-                                                                       self.network.batch_size: 10
-                                                                       })
-                print('iter step:%d cls loss:%f,reg loss:%f,seg loss:%f' % (iter, los_cls, los_reg, los_seg))
+

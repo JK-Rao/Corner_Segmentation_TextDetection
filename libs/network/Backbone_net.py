@@ -16,6 +16,7 @@ import numpy as np
 class Backbone_net(Network):
     def __init__(self):
         tf.reset_default_graph()
+        self.graph = tf.get_default_graph()
         Network.__init__(self, 'backbone')
         self.IM_HEIGHT = 512
         self.IM_WIDTH = 512
@@ -32,6 +33,9 @@ class Backbone_net(Network):
         self.off_dict = {}
         self.seg = None
 
+        self.vgg16_variables = None
+        self.vgg16_initializer = None
+
         self.setup(self.X, 'backbone')
 
     def setup(self, x, scope_name, reuse=False):
@@ -42,10 +46,10 @@ class Backbone_net(Network):
             self.feed(conv5_3, 'abandon tensor') \
                 .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2], 'scale5_3', 'offset5_3', 'mean5_3', 'var5_3') \
                 .relu('abandon tensor') \
-                .conv2d('abandon tensor', 1024, 3, 3, 1, 1, 'conv6_W', 'conv6_b') \
+                .conv2d('abandon tensor', 1024, 3, 3, 2, 2, 'conv6_W', 'conv6_b') \
                 .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2], 'scale6', 'offset6', 'mean6', 'var6') \
                 .relu('save tensor') \
-                .conv2d('abandon tensor', 1024, 3, 3, 2, 2, 'conv7_W', 'conv7_b') \
+                .conv2d('abandon tensor', 1024, 1, 1, 2, 2, 'conv7_W', 'conv7_b') \
                 .normal('abandon tensor', self.on_train, 0.5, [0, 1, 2], 'scale7', 'offset7', 'mean7', 'var7') \
                 .relu('save tensor') \
                 .conv2d('abandon tensor', 256, 1, 1, 1, 1, 'conv8_1W', 'conv8_1b') \
@@ -103,10 +107,7 @@ class Backbone_net(Network):
             .concat_tensor(self.off_dict['f4_CPD'], 4) \
             .concat_tensor(self.off_dict['f3_CPD'], 4)
         flatten_pred_reg = self.pre_process_tensor
-        self.feed(self.seg[0], 'flatten tensor x4') \
-            .concat_tensor(self.seg[1], 4) \
-            .concat_tensor(self.seg[2], 4) \
-            .concat_tensor(self.seg[3], 4)
+        self.feed(self.seg, 'flatten tensor x1')
         flatten_pred_seg = self.pre_process_tensor
 
         OHEM_mask = self.Ycls[:, 1] > 1
@@ -115,15 +116,16 @@ class Backbone_net(Network):
         pos_num = tf.reduce_sum(OHEM_mask)
         neg_num = pos_num * 3
         val, index = tf.nn.top_k(flatten_pred_cls[:, 1], k=neg_num)
+        cls_pos = tf.reshape(flatten_pred_cls[:, 1], shape=[-1, 1])
         OHEM_mask_cls = tf.cast(OHEM_mask, dtype=tf.bool)
-        OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, flatten_pred_cls[:, 1] >= val[-1])
+        OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, cls_pos >= val[-1])
         OHEM_mask_cls = tf.cast(OHEM_mask_cls, dtype=tf.float32)
         # cls loss
         loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls), axis=[1], keep_dims=True) * OHEM_mask_cls
         # reg loss
         delta_reg = tf.abs(flatten_pred_reg - self.Yreg)
         OHEM_mask = tf.cast(OHEM_mask, dtype=tf.float32)
-        smooth_l1_sign = tf.cast(tf.reshape(delta_reg < 1, shape=[-1, 1]), dtype=tf.float32)
+        smooth_l1_sign = tf.cast(tf.reshape(delta_reg < 1, shape=[-1, 4]), dtype=tf.float32)
         loss_reg = tf.reduce_sum(0.5 * tf.pow(delta_reg, 2) * smooth_l1_sign + \
                                  (delta_reg - 0.5) * (1 - smooth_l1_sign), axis=[1], keep_dims=True) * OHEM_mask
         # seg loss
@@ -242,10 +244,10 @@ class Backbone_net(Network):
         return self.layer_tensor_demand()
 
     def get_graph(self):
-        return tf.get_default_graph()
+        return self.graph
 
     def load_vgg_model(self):
-        graph = self.get_graph()
+        graph = self.graph
         with tf.variable_scope('vgg_16'):
             self.feed(self.X, 'abandon tensor') \
                 .conv2d('abandon tensor', 64, 3, 3, 1, 1, 'conv1/conv1_1/weights', 'conv1/conv1_1/biases') \
@@ -277,16 +279,18 @@ class Backbone_net(Network):
                 .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_2/weights', 'conv5/conv5_2/biases') \
                 .relu('abandon tensor') \
                 .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_3/weights', 'conv5/conv5_3/biases') \
-                .relu('save tensor')
-        model_path = 'model/vgg_16.ckpt'
+                .relu('abandon tensor')
+        model_path = 'model/vgg_model/vgg_16.ckpt'
         assert (os.path.isfile(model_path))
 
         variables_to_restore = tf.contrib.framework.get_variables_to_restore()
         variables_to_restore.pop(0)
+        self.vgg16_variables = variables_to_restore
         init_vgg = tf.contrib.framework.assign_from_checkpoint_fn(model_path, variables_to_restore)
+        self.vgg16_initializer = init_vgg
 
-        with tf.Session(graph=graph) as sess:
-            sess.run(tf.global_variables_initializer())
-            init_vgg(sess)
+        # with tf.Session(graph=graph) as sess:
+        #     sess.run(tf.global_variables_initializer())
+        #     init_vgg(sess)
 
         return self.layer_tensor_demand()

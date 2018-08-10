@@ -71,6 +71,9 @@ class Network(object):
         elif save_tensor == 'flatten tensor x4':
             self.pre_process_tensor = tf.reshape(self.pre_process_tensor,
                                                  shape=[-1, 4])
+        elif save_tensor == 'flatten tensor x1':
+            self.pre_process_tensor = tf.reshape(self.pre_process_tensor,
+                                                 shape=[-1, 1])
         return self
 
     def weight_var(self, shape, name):
