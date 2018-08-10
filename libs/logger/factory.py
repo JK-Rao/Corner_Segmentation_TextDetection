@@ -7,19 +7,27 @@
 from .DCGAN_data_stream import DCGAN_get_pipeline
 from .CPD_stream import ground_truth2feature_map
 import scipy.io as sio
+import cv2
+from os.path import join
+import numpy as np
 
 
 def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, filename=None):
     if model_name == 'DCGAN':
         return DCGAN_get_pipeline(sess, propose, batch_size, filename)
-    elif model_name=='CPD':
-        CPD_mat=sio.loadmat('./model/gt_model/gt.mat')
-        dicts=list()
+    elif model_name == 'CPD':
+        CPD_mat = sio.loadmat('./model/gt_model/gt.mat')
+        dicts = list()
+        img_batch = None
         if not batch_size is None:
-            for i in range(batch_size[0],batch_size[1]):
+            for i in range(batch_size[0], batch_size[1]):
                 gt_array = CPD_mat['wordBB'][0][i]
                 dicts.append(ground_truth2feature_map(gt_array))
+                img_batch = cv2.imread(join('./img_data', CPD_mat['imnames'][0][i]))[np.newaxis, :] if img_batch is None \
+                    else np.append(img_batch, cv2.imread(join('./img_data', CPD_mat['imnames'][0][i]))[np.newaxis, :],
+                                   axis=0)
         else:
-            gt_array=CPD_mat['wordBB'][0][0]
+            gt_array = CPD_mat['wordBB'][0][0]
             dicts.append(ground_truth2feature_map(gt_array))
-        return dicts
+            img_batch = cv2.imread(join('./img_data', CPD_mat['imnames'][0][0]))[np.newaxis, :]
+        return dicts, img_batch

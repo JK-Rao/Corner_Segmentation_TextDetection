@@ -36,10 +36,10 @@ def flatten_concat(stand_data):
         cls_data = np.reshape(cls_data_scale, [-1, 2]) if cls_data is None \
             else np.append(cls_data, np.reshape(cls_data_scale, [-1, 2]), axis=0)
         reg_data = np.reshape(reg_data_scale, [-1, 4]) if reg_data is None \
-            else np.append(reg_data, np.reshape(reg_data_scale, [-1, 4]),axis=0)
+            else np.append(reg_data, np.reshape(reg_data_scale, [-1, 4]), axis=0)
         if not process_one_scale:
             seg_data = np.reshape(seg_data_scale, [-1, 1]) if seg_data is None \
-                else np.append(seg_data, np.reshape(seg_data_scale, [-1, 1]),axis=0)
+                else np.append(seg_data, np.reshape(seg_data_scale, [-1, 1]), axis=0)
         process_one_scale = True
     return {'cls_data': cls_data,
             'reg_data': reg_data,
@@ -62,7 +62,28 @@ class Backbone_line(AssemblyLine):
     def structure_train_context(self):
         loss_dict = self.network.structure_loss()
         opti_dict = self.network.define_optimizer(loss_dict)
-
         self.sess.run(tf.global_variables_initializer())
-        for iter in range(70000):
-            Y_mb = get_sample_tensor('CPD')
+        for iter in range(1000):
+            Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * 24, iter * 24 + 24])
+            Y_tain_mb_flatten = flatten_concat(Y_train_mb)
+
+            self.sess.run(opti_dict, feed_dict={self.network.X: X_train_mb,
+                                                self.network.Ycls: Y_tain_mb_flatten['cls_data'],
+                                                self.network.Yreg: Y_tain_mb_flatten['reg_data'],
+                                                self.network.Yseg: Y_tain_mb_flatten['seg_data'],
+                                                self.network.on_train: True,
+                                                self.network.batch_size: 24
+                                                })
+            if iter % 10 == 0:
+                Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[24 * 1000 + iter * 10,
+                                                                          24 * 1000 + iter * 10 + 10])
+                Y_val_mb_flatten = flatten_concat(Y_train_mb)
+                los_cls, los_reg, los_seg \
+                    = self.sess.run(list(loss_dict.values), feed_dict={self.network.X: X_val_mb,
+                                                                       self.network.Ycls: Y_val_mb_flatten['cls_data'],
+                                                                       self.network.Yreg: Y_val_mb_flatten['reg_data'],
+                                                                       self.network.Yseg: Y_val_mb_flatten['seg_data'],
+                                                                       self.network.on_train: False,
+                                                                       self.network.batch_size: 10
+                                                                       })
+                print('iter step:%d cls loss:%f,reg loss:%f,seg loss:%f' % (iter, los_cls, los_reg, los_seg))
