@@ -69,6 +69,8 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
                                int(step_H * stride + stride / 2 + scal / 2)]
                 ins_score = calcul_iou(default_box, [int(left), int(top), int(right), int(bottom)])
                 if ins_score > threshold:
+                    if point_type==0 and scal_index==0:
+                        fc=0
                     # print(ins_score)
                     # print(step_H, step_W, scal)
                     cent_dbox = [int((default_box[0] + default_box[2]) / 2),

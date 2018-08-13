@@ -49,17 +49,14 @@ def gt_array2gt_rects(gt_array):
     for i in range(gt_array.shape[2]):
         if np.max(gt_array[:, :, i]) > 512:
             continue
-        ssl = np.sqrt((gt_array[0, 3, i] - gt_array[0, 0, i]) ** 2 + (gt_array[1, 3, i] - gt_array[1, 0, i])) ** 2
-        sst = np.sqrt((gt_array[0, 1, i] - gt_array[0, 0, i]) ** 2 + (gt_array[1, 1, i] - gt_array[1, 0, i])) ** 2
-        ssr = np.sqrt((gt_array[0, 2, i] - gt_array[0, 1, i]) ** 2 + (gt_array[1, 2, i] - gt_array[1, 1, i])) ** 2
-        ssb = np.sqrt((gt_array[0, 3, i] - gt_array[0, 2, i]) ** 2 + (gt_array[1, 3, i] - gt_array[1, 2, i])) ** 2
+        ssl = np.sqrt((gt_array[0, 3, i] - gt_array[0, 0, i]) ** 2 + (gt_array[1, 3, i] - gt_array[1, 0, i]) ** 2)
+        sst = np.sqrt((gt_array[0, 1, i] - gt_array[0, 0, i]) ** 2 + (gt_array[1, 1, i] - gt_array[1, 0, i]) ** 2)
+        ssr = np.sqrt((gt_array[0, 2, i] - gt_array[0, 1, i]) ** 2 + (gt_array[1, 2, i] - gt_array[1, 1, i]) ** 2)
+        ssb = np.sqrt((gt_array[0, 3, i] - gt_array[0, 2, i]) ** 2 + (gt_array[1, 3, i] - gt_array[1, 2, i]) ** 2)
         ss = np.sort([ssl, sst, ssr, ssb])[0]
         for point_type in range(4):
             gt_rects.append([gt_array[0, point_type, i], gt_array[1, point_type, i], ss, ss, point_type])
     return gt_rects
-
-
-
 
 
 # gt_array:A 3d tensor,[2,4,None]

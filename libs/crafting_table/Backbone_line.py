@@ -10,6 +10,7 @@ import tensorflow as tf
 import numpy as np
 import time
 import cv2
+import copy
 from os.path import join
 import os
 
@@ -58,6 +59,45 @@ class Backbone_line(AssemblyLine):
         # config.gpu_options.allow_growth = True
         return config
 
+    def artificial_check(self, X_mb, Y_mb):
+        # show imgs
+        for img_index in range(X_mb.shape[0]):
+            dyeing_X = copy.deepcopy(X_mb[img_index])
+            cv2.imshow('img', X_mb[img_index])
+            Y_m = Y_mb[img_index]
+            seg_map = Y_m['seg_mask'][0][0]
+            # segment check
+            for channel in range(4):
+                if channel < 3:
+                    dyeing_X[:, :, channel] += ((255 - dyeing_X[:, :, channel]) * (seg_map[:, :, channel])).astype(
+                        np.uint8)
+                else:
+                    dyeing_X[:, :, channel - 1] += (
+                                (255 - dyeing_X[:, :, channel - 1]) * (seg_map[:, :, channel])).astype(np.uint8)
+                    dyeing_X[:, :, 0] += ((255 - dyeing_X[:, :, 0]) * (seg_map[:, :, channel])).astype(np.uint8)
+                cv2.imshow('seg map%d' % channel, seg_map[:, :, channel])
+            cv2.imshow('img_dyeing', dyeing_X)
+            # classify check
+            for scale in range(7):
+                cls_map = Y_m['cls_mask'][scale][0]
+                point_type_len=cls_map.shape[2]/8
+                for scale_type in range(cls_map.shape[2]/2):
+                    index = np.where(cls_map[:, :, scale_type*2+1] > 0.5)
+                    index = np.array(index).T
+                    index = index * int(256 / (2 ** scale))
+                    if scale_type/point_type_len==0:
+                        color=(0,0,255)
+                    elif scale_type/point_type_len==1:
+                        color=(0,255,0)
+                    elif scale_type/point_type_len==2:
+                        color=(255,0,0)
+                    elif scale_type/point_type_len==3:
+                        color=(255,0,255)
+                    for ind in index:
+                        cv2.circle(dyeing_X, (ind[1], ind[0]), 2, color, 2)
+            cv2.imshow('img_dyeing', dyeing_X)
+        cv2.waitKey()
+
     def structure_train_context(self):
         loss_dict = self.network.structure_loss()
         opti_dict = self.network.define_optimizer(loss_dict)
@@ -71,6 +111,7 @@ class Backbone_line(AssemblyLine):
                                                                           + self.val_size])
                 print('val')
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
+                self.artificial_check(X_val_mb, Y_val_mb)
                 los_cls, los_reg, los_seg \
                     = self.sess.run([tf.reduce_mean(loss_dict['cls loss']),
                                      tf.reduce_mean(loss_dict['reg loss']),
