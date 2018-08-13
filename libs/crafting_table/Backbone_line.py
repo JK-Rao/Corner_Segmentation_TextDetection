@@ -106,12 +106,15 @@ class Backbone_line(AssemblyLine):
                         reg_val = reg_map[index[orde][0], index[orde][1], 4 * scale_type:4 * scale_type + 4]
                         Dx = reg_val[0] * default_box_width
                         Dy = reg_val[1] * default_box_width
-                        Ds = np.exp(reg_val[2]) * default_box_width
+                        Ss = int(np.exp(reg_val[2]) * default_box_width)
                         ind[1] = ind[1] + Dx
                         ind[0] = ind[0] + Dy
                         # detection
-                        print(ind[1],ind[0])
+                        # print(ind[1],ind[0])
                         cv2.circle(dyeing_X, (ind[1], ind[0]), 2, color, 2)
+                        rect_lt=(ind[1]-Ss//2,ind[0]-Ss//2)
+                        rect_rb=(ind[1]+Ss//2,ind[0]+Ss//2)
+                        cv2.rectangle(dyeing_X,rect_lt,rect_rb,color,1)
 
             cv2.imshow('img_dyeing', dyeing_X)
             cv2.waitKey()

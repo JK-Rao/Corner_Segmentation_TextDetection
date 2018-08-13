@@ -25,12 +25,14 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
                 img_height, img_width = img.shape[0:2]
                 img = cv2.resize(img, (512, 512))
                 img = img[np.newaxis, :]
-                img_batch = img if img_batch is None else np.append(img_batch, img, axis=0)
 
                 gt_array = CPD_mat['wordBB'][0][i]
                 gt_array[0]=gt_array[0]*512./img_width
                 gt_array[1]=gt_array[1]*512./img_height
                 gt_array.astype(np.int32)
+                if len(gt_array.shape)<3:
+                    continue
+                img_batch = img if img_batch is None else np.append(img_batch, img, axis=0)
                 dicts.append(ground_truth2feature_map(gt_array))
         else:
             img = cv2.imread(join('/home/cj3/Downloads/im/SynthText', CPD_mat['imnames'][0][0][0].encode('gb18030')))
