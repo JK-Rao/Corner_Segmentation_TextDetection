@@ -59,7 +59,7 @@ class Backbone_line(AssemblyLine):
         # config.gpu_options.allow_growth = True
         return config
 
-    def artificial_check(self, X_mb, Y_mb):
+    def artificial_check(self, X_mb, Y_mb, scale_table):
         # show imgs
         for img_index in range(X_mb.shape[0]):
             dyeing_X = copy.deepcopy(X_mb[img_index])
@@ -71,32 +71,50 @@ class Backbone_line(AssemblyLine):
                 if channel < 3:
                     dyeing_X[:, :, channel] += ((255 - dyeing_X[:, :, channel]) * (seg_map[:, :, channel])).astype(
                         np.uint8)
+                    seg_map_rgb = copy.deepcopy(seg_map[:, :, channel] * 255).astype(np.uint8)
+                    seg_map_rgb = cv2.cvtColor(seg_map_rgb, cv2.COLOR_GRAY2BGR)
                 else:
                     dyeing_X[:, :, channel - 1] += (
-                                (255 - dyeing_X[:, :, channel - 1]) * (seg_map[:, :, channel])).astype(np.uint8)
+                            (255 - dyeing_X[:, :, channel - 1]) * (seg_map[:, :, channel])).astype(np.uint8)
                     dyeing_X[:, :, 0] += ((255 - dyeing_X[:, :, 0]) * (seg_map[:, :, channel])).astype(np.uint8)
-                cv2.imshow('seg map%d' % channel, seg_map[:, :, channel])
+                    seg_map_rgb=copy.deepcopy(seg_map[:,:,channel]*255).astype(np.uint8)
+                    seg_map_rgb=cv2.cvtColor(seg_map_rgb,cv2.COLOR_GRAY2BGR)
+                cv2.imshow('seg map%d' % channel, seg_map_rgb)
             cv2.imshow('img_dyeing', dyeing_X)
             # classify check
             for scale in range(7):
                 cls_map = Y_m['cls_mask'][scale][0]
-                point_type_len=cls_map.shape[2]/8
-                for scale_type in range(cls_map.shape[2]/2):
-                    index = np.where(cls_map[:, :, scale_type*2+1] > 0.5)
+                reg_map = Y_m['reg_mask'][scale][0]
+                point_type_len = cls_map.shape[2] / 8
+                color = tuple()
+                for scale_type in range(cls_map.shape[2] / 2):
+                    default_box_width=scale_table[scale][scale_type % point_type_len]
+                    index = np.where(cls_map[:, :, scale_type * 2 + 1] > 0.5)
                     index = np.array(index).T
-                    index = index * int(256 / (2 ** scale))
-                    if scale_type/point_type_len==0:
-                        color=(0,0,255)
-                    elif scale_type/point_type_len==1:
-                        color=(0,255,0)
-                    elif scale_type/point_type_len==2:
-                        color=(255,0,0)
-                    elif scale_type/point_type_len==3:
-                        color=(255,0,255)
-                    for ind in index:
+                    index_img = index * int(256 / (2 ** scale))+int(256 / (2 ** scale))/2
+
+                    if scale_type / point_type_len == 0:
+                        color = (0, 0, 255)
+                    elif scale_type / point_type_len == 1:
+                        color = (0, 255, 0)
+                    elif scale_type / point_type_len == 2:
+                        color = (255, 0, 0)
+                    elif scale_type / point_type_len == 3:
+                        color = (255, 0, 255)
+                    for orde, ind in enumerate(index_img):
+                        # regression check
+                        reg_val = reg_map[index[orde][0], index[orde][1], 4 * scale_type:4 * scale_type + 4]
+                        Dx = reg_val[0] * default_box_width
+                        Dy = reg_val[1] * default_box_width
+                        Ds = np.exp(reg_val[2]) * default_box_width
+                        ind[1] = ind[1] + Dx
+                        ind[0] = ind[0] + Dy
+                        # detection
+                        print(ind[1],ind[0])
                         cv2.circle(dyeing_X, (ind[1], ind[0]), 2, color, 2)
+
             cv2.imshow('img_dyeing', dyeing_X)
-        cv2.waitKey()
+            cv2.waitKey()
 
     def structure_train_context(self):
         loss_dict = self.network.structure_loss()
@@ -104,6 +122,13 @@ class Backbone_line(AssemblyLine):
         self.sess.run(tf.global_variables_initializer())
         init_vgg16 = self.network.vgg16_initializer
         init_vgg16(self.sess)
+        scale_table = [[256, 232, 208, 184],
+                       [124, 136, 148, 160],
+                       [88, 96, 104, 112],
+                       [56, 64, 72, 80],
+                       [36, 40, 44, 48],
+                       [20, 24, 28, 32],
+                       [4, 8, 6, 10, 12, 16]]
         for iter in range(1):
             if iter % 10 == 0:
                 Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
@@ -111,7 +136,7 @@ class Backbone_line(AssemblyLine):
                                                                           + self.val_size])
                 print('val')
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
-                self.artificial_check(X_val_mb, Y_val_mb)
+                self.artificial_check(X_val_mb, Y_val_mb,scale_table)
                 los_cls, los_reg, los_seg \
                     = self.sess.run([tf.reduce_mean(loss_dict['cls loss']),
                                      tf.reduce_mean(loss_dict['reg loss']),

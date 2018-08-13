@@ -60,7 +60,7 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
                         int(np.ceil((bottom + max_scale // 2) / stride))):
         for step_W in range(int(np.floor((left - max_scale // 2) / stride)),
                             int(np.ceil((right + max_scale // 2) / stride))):
-            if step_H < 0 or step_W < 0 or step_H > height-1 or step_W > width-1:
+            if step_H < 0 or step_W < 0 or step_H > height - 1 or step_W > width - 1:
                 continue
             for scal_index, scal in enumerate(scale):
                 default_box = [int(step_W * stride + stride / 2 - scal / 2),
@@ -69,8 +69,8 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
                                int(step_H * stride + stride / 2 + scal / 2)]
                 ins_score = calcul_iou(default_box, [int(left), int(top), int(right), int(bottom)])
                 if ins_score > threshold:
-                    if point_type==0 and scal_index==0:
-                        fc=0
+                    if point_type == 0 and scal_index == 0:
+                        fc = 0
                     # print(ins_score)
                     # print(step_H, step_W, scal)
                     cent_dbox = [int((default_box[0] + default_box[2]) / 2),
@@ -106,14 +106,14 @@ def project_feature_map_seg(gt_array, seg_map):
                                  (full_corner[3, 1] + full_corner[7, 1]) / 2]).astype(np.int32)
 
         points_list = list()
-        points_list.append(full_corner[0].tolist() + full_corner[1].tolist() + center_point.tolist() + full_corner[
-            -1].tolist())
-        points_list.append(full_corner[1].tolist() + full_corner[2].tolist() + full_corner[
-            3].tolist() + center_point.tolist())
-        points_list.append(center_point.tolist() + full_corner[3].tolist() + full_corner[4].tolist() + full_corner[
-            5].tolist())
-        points_list.append(full_corner[-1].tolist() + center_point.tolist() + full_corner[5].tolist() + full_corner[
-            6].tolist())
+        points_list.append((full_corner[0] - 1).tolist() + (full_corner[1] - 1).tolist() + (center_point - 1).tolist() +
+                           (full_corner[-1] - 1).tolist())
+        points_list.append((full_corner[1] - np.array([0, 1])).tolist() + (full_corner[2] - np.array([0, 1])).tolist() +
+                           (full_corner[3] - np.array([0, 1])).tolist() + (center_point - np.array([0, 1])).tolist())
+        points_list.append(center_point.tolist() + full_corner[3].tolist() + full_corner[4].tolist() +
+                           full_corner[5].tolist())
+        points_list.append((full_corner[-1] - np.array([1, 0])).tolist() + (center_point - np.array([1, 0])).tolist() +
+                           (full_corner[5] - np.array([1, 0])).tolist() + (full_corner[6] - np.array([1, 0])).tolist())
         for i in range(4):
             seg_map[0, :, :, i] = cv2.drawContours(copy.deepcopy(seg_map[0, :, :, i]),
                                                    [np.array(points_list[i]).reshape([4, 2]).astype(np.int32)],
