@@ -77,8 +77,8 @@ class Backbone_line(AssemblyLine):
                     dyeing_X[:, :, channel - 1] += (
                             (255 - dyeing_X[:, :, channel - 1]) * (seg_map[:, :, channel])).astype(np.uint8)
                     dyeing_X[:, :, 0] += ((255 - dyeing_X[:, :, 0]) * (seg_map[:, :, channel])).astype(np.uint8)
-                    seg_map_rgb=copy.deepcopy(seg_map[:,:,channel]*255).astype(np.uint8)
-                    seg_map_rgb=cv2.cvtColor(seg_map_rgb,cv2.COLOR_GRAY2BGR)
+                    seg_map_rgb = copy.deepcopy(seg_map[:, :, channel] * 255).astype(np.uint8)
+                    seg_map_rgb = cv2.cvtColor(seg_map_rgb, cv2.COLOR_GRAY2BGR)
                 cv2.imshow('seg map%d' % channel, seg_map_rgb)
             cv2.imshow('img_dyeing', dyeing_X)
             # classify check
@@ -88,10 +88,10 @@ class Backbone_line(AssemblyLine):
                 point_type_len = cls_map.shape[2] / 8
                 color = tuple()
                 for scale_type in range(cls_map.shape[2] / 2):
-                    default_box_width=scale_table[scale][scale_type % point_type_len]
+                    default_box_width = scale_table[scale][scale_type % point_type_len]
                     index = np.where(cls_map[:, :, scale_type * 2 + 1] > 0.5)
                     index = np.array(index).T
-                    index_img = index * int(256 / (2 ** scale))+int(256 / (2 ** scale))/2
+                    index_img = index * int(256 / (2 ** scale)) + int(256 / (2 ** scale)) / 2
 
                     if scale_type / point_type_len == 0:
                         color = (0, 0, 255)
@@ -112,9 +112,9 @@ class Backbone_line(AssemblyLine):
                         # detection
                         # print(ind[1],ind[0])
                         cv2.circle(dyeing_X, (ind[1], ind[0]), 2, color, 2)
-                        rect_lt=(ind[1]-Ss//2,ind[0]-Ss//2)
-                        rect_rb=(ind[1]+Ss//2,ind[0]+Ss//2)
-                        cv2.rectangle(dyeing_X,rect_lt,rect_rb,color,1)
+                        rect_lt = (ind[1] - Ss // 2, ind[0] - Ss // 2)
+                        rect_rb = (ind[1] + Ss // 2, ind[0] + Ss // 2)
+                        cv2.rectangle(dyeing_X, rect_lt, rect_rb, color, 1)
 
             cv2.imshow('img_dyeing', dyeing_X)
             cv2.waitKey()
@@ -139,7 +139,7 @@ class Backbone_line(AssemblyLine):
                                                                           + self.val_size])
                 print('val')
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
-                self.artificial_check(X_val_mb, Y_val_mb,scale_table)
+                self.artificial_check(X_val_mb, Y_val_mb, scale_table)
                 los_cls, los_reg, los_seg \
                     = self.sess.run([tf.reduce_mean(loss_dict['cls loss']),
                                      tf.reduce_mean(loss_dict['reg loss']),
