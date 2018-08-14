@@ -29,7 +29,6 @@ class AssemblyLine(object):
         return merged
 
     def write_summary(self, mg):
-        self.sess.as_default()
         self.summary_writer.add_summary(mg, self.iter_num)
 
     def close_summary_writer(self):

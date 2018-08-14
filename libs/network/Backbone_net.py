@@ -36,6 +36,9 @@ class Backbone_net(Network):
         self.vgg16_variables = None
         self.vgg16_initializer = None
 
+        self.loss_dict = None
+        self.lamd = 0
+
         self.setup(self.X, 'backbone')
 
     def setup(self, x, scope_name, reuse=False):
@@ -82,8 +85,17 @@ class Backbone_net(Network):
             self.setup_position_sen_seg(f_mix)
             a = 1
 
-    def flatten_tensor(self, tensor):
-        return tf.reshape(tensor, [-1, tensor.get_shape().as_list()[-1]])
+    def get_summary(self):
+        if self.loss_dict is None:
+            raise ValueError('loss is None...')
+        return {
+            'total': self.loss_dict['cls loss'] + self.loss_dict['reg loss'] + self.loss_dict['seg loss'] * self.lamd,
+            'cls loss': self.loss_dict['cls loss'],
+            'reg loss': self.loss_dict['reg loss'],
+            'seg loss': self.loss_dict['seg loss']}
+
+    # def flatten_tensor(self, tensor):
+    #     return tf.reshape(tensor, [-1, tensor.get_shape().as_list()[-1]])
 
     def get_pred(self):
         return self.detect_dict, self.off_dict, self.seg
@@ -108,17 +120,20 @@ class Backbone_net(Network):
         self.feed(self.seg, 'flatten tensor x1')
         flatten_pred_seg = self.pre_process_tensor
 
-        OHEM_mask = self.Ycls[:, 1] > 1
-        OHEM_mask = tf.logical_or(OHEM_mask, self.Ycls[:, 1] >= 1)
+        OHEM_mask = self.Ycls[:, 1] >= 1
+        # OHEM_mask = tf.logical_or(OHEM_mask, self.Ycls[:, 1] >= 1)
         OHEM_mask = tf.reshape(tf.cast(OHEM_mask, dtype=tf.int32), shape=[-1, 1])
         pos_num = tf.reduce_sum(OHEM_mask)
         neg_num = pos_num * 3
-        val, index = tf.nn.top_k(flatten_pred_cls[:, 1], k=neg_num)
+        flatten_pred_cls_neg = tf.where(tf.reshape(tf.cast(OHEM_mask, tf.bool), shape=[-1]),
+                                        tf.zeros_like(flatten_pred_cls[:, 1], dtype=tf.float32),
+                                        flatten_pred_cls[:, 1])
+        val, index = tf.nn.top_k(flatten_pred_cls_neg, k=neg_num)
         cls_pos = tf.reshape(flatten_pred_cls[:, 1], shape=[-1, 1])
         OHEM_mask_cls = tf.cast(OHEM_mask, dtype=tf.bool)
         OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, cls_pos >= val[-1])
         OHEM_mask_cls = tf.cast(OHEM_mask_cls, dtype=tf.float32)
-        data_num = tf.reduce_sum(OHEM_mask_cls)
+        # data_num = tf.reduce_sum(OHEM_mask_cls)
         # cls loss
         epsilon = 1e-10
         loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls + epsilon), axis=[1],
@@ -134,19 +149,21 @@ class Backbone_net(Network):
                    tf.reduce_sum(self.Yseg + (flatten_pred_seg))
         # loss_seg=tf.norm(self.Yseg-flatten_pred_seg)/5000
 
-        return {'cls loss': tf.reduce_sum(loss_cls) / data_num,
-                'reg loss': tf.reduce_sum(loss_reg) / data_num,
-                'seg loss': loss_seg}
+        self.loss_dict = {'cls loss': tf.reduce_sum(loss_cls) / tf.cast(pos_num, tf.float32),
+                          'reg loss': tf.reduce_sum(loss_reg) / tf.cast(pos_num, tf.float32),
+                          'seg loss': loss_seg}
+
+        return self.loss_dict, tf.reduce_sum(OHEM_mask), tf.reduce_sum(OHEM_mask_cls)
 
     def define_optimizer(self, loss_dict):
         backbone_vars = self.get_trainable_var('backbone')
         vgg_vars = self.get_trainable_var('vgg_16')
         total_vars = backbone_vars + vgg_vars
-        loss = loss_dict['cls loss'] + loss_dict['reg loss'] + 10 * loss_dict['seg loss']
+        loss = loss_dict['cls loss'] + loss_dict['reg loss'] + self.lamd * loss_dict['seg loss']
         optimizer = tf.train.AdamOptimizer(0.0001).minimize(loss,
                                                             global_step=self.global_step,
                                                             var_list=total_vars)
-        return optimizer
+        return optimizer, total_vars
 
     def setup_corner_point_dect(self, f):
         for f_in in f:

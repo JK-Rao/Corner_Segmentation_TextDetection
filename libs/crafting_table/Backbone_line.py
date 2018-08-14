@@ -120,8 +120,8 @@ class Backbone_line(AssemblyLine):
             cv2.waitKey()
 
     def structure_train_context(self):
-        loss_dict = self.network.structure_loss()
-        opti_dict = self.network.define_optimizer(loss_dict)
+        loss_dict, OHEM, OHEM_cls = self.network.structure_loss()
+        opti_dict, total_vars = self.network.define_optimizer(loss_dict)
         self.sess.run(tf.global_variables_initializer())
         init_vgg16 = self.network.vgg16_initializer
         init_vgg16(self.sess)
@@ -132,6 +132,9 @@ class Backbone_line(AssemblyLine):
                        [36, 40, 44, 48],
                        [20, 24, 28, 32],
                        [4, 8, 6, 10, 12, 16]]
+
+        saver = self.get_saver(total_vars)
+        merged = self.create_summary('./data/logs/log_CSTR')
         for iter in range(50000):
             if iter % 50 == 0:
                 Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
@@ -143,10 +146,13 @@ class Backbone_line(AssemblyLine):
                 print('val testing...')
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
                 # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
-                los_cls, los_reg, los_seg \
+                los_cls, los_reg, los_seg, mg, OHEM_data, OHEM_data_cls \
                     = self.sess.run([loss_dict['cls loss'],
                                      loss_dict['reg loss'],
-                                     loss_dict['seg loss']],
+                                     loss_dict['seg loss'],
+                                     merged,
+                                     OHEM,
+                                     OHEM_cls],
                                     feed_dict={self.network.X: X_val_mb,
                                                self.network.Ycls: Y_val_mb_flatten['cls_data'],
                                                self.network.Yreg: Y_val_mb_flatten['reg_data'],
@@ -155,7 +161,10 @@ class Backbone_line(AssemblyLine):
                                                self.network.batch_size: actually_batch_size
                                                })
                 print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
-                      % (iter, (los_cls + los_reg + los_seg * 10), los_cls, los_reg, los_seg * 10))
+                      % (iter, (los_cls + los_reg + los_seg * self.network.lamd), los_cls, los_reg,
+                         los_seg * self.network.lamd))
+                self.iter_num = iter
+                self.write_summary(mg)
 
                 # t1 = time.time()
                 # self.sess.run([self.network.get_pred()[2],
