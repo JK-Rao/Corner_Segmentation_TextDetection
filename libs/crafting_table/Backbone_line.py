@@ -139,11 +139,11 @@ class Backbone_line(AssemblyLine):
                                                                           + self.val_size])
                 print('val')
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
-                self.artificial_check(X_val_mb, Y_val_mb, scale_table)
-                los_cls, los_reg, los_seg \
-                    = self.sess.run([tf.reduce_mean(loss_dict['cls loss']),
-                                     tf.reduce_mean(loss_dict['reg loss']),
-                                     tf.reduce_mean(loss_dict['seg loss'])],
+                # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
+                los_cls, los_reg, los_seg\
+                    = self.sess.run([loss_dict['cls loss'],
+                                     loss_dict['reg loss'],
+                                     loss_dict['seg loss']],
                                     feed_dict={self.network.X: X_val_mb,
                                                self.network.Ycls: Y_val_mb_flatten['cls_data'],
                                                self.network.Yreg: Y_val_mb_flatten['reg_data'],

@@ -118,6 +118,7 @@ class Backbone_net(Network):
         OHEM_mask_cls = tf.cast(OHEM_mask, dtype=tf.bool)
         OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, cls_pos >= val[-1])
         OHEM_mask_cls = tf.cast(OHEM_mask_cls, dtype=tf.float32)
+        data_num=tf.reduce_sum(OHEM_mask_cls)
         # cls loss
         epsilon=1e-8
         loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls+epsilon), axis=[1], keep_dims=True) * OHEM_mask_cls
@@ -130,8 +131,8 @@ class Backbone_net(Network):
         # seg loss
         loss_seg = 1 - tf.reduce_sum(2 * self.Yseg * flatten_pred_seg) / tf.reduce_sum(self.Yseg + flatten_pred_seg)
 
-        return {'cls loss': loss_cls,
-                'reg loss': loss_reg,
+        return {'cls loss': tf.reduce_sum(loss_cls)/data_num,
+                'reg loss': tf.reduce_sum(loss_reg)/data_num,
                 'seg loss': loss_seg}
 
     def define_optimizer(self, loss_dict):
