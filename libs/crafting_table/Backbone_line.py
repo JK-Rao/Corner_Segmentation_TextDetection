@@ -40,7 +40,7 @@ def flatten_concat(stand_data):
         if not process_one_scale:
             seg_data = np.reshape(seg_data_scale, [-1, 1]) if seg_data is None \
                 else np.append(seg_data, np.reshape(seg_data_scale, [-1, 1]), axis=0)
-        process_one_scale = True
+            process_one_scale = True
     return {'cls_data': cls_data,
             'reg_data': reg_data,
             'seg_data': seg_data}
@@ -132,15 +132,18 @@ class Backbone_line(AssemblyLine):
                        [36, 40, 44, 48],
                        [20, 24, 28, 32],
                        [4, 8, 6, 10, 12, 16]]
-        for iter in range(1):
-            if iter % 10 == 0:
+        for iter in range(50000):
+            if iter % 50 == 0:
                 Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
                                                                           self.batch_size * 1000 + iter * self.val_size \
                                                                           + self.val_size])
-                print('val')
+                if X_val_mb is None:
+                    continue
+                actually_batch_size = X_val_mb.shape[0]
+                print('val testing...')
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
                 # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
-                los_cls, los_reg, los_seg\
+                los_cls, los_reg, los_seg \
                     = self.sess.run([loss_dict['cls loss'],
                                      loss_dict['reg loss'],
                                      loss_dict['seg loss']],
@@ -149,34 +152,39 @@ class Backbone_line(AssemblyLine):
                                                self.network.Yreg: Y_val_mb_flatten['reg_data'],
                                                self.network.Yseg: Y_val_mb_flatten['seg_data'],
                                                self.network.on_train: False,
-                                               self.network.batch_size: self.val_size
+                                               self.network.batch_size: actually_batch_size
                                                })
-                print('iter step:%d cls loss:%f,reg loss:%f,seg loss:%f' % (iter, los_cls, los_reg, los_seg))
+                print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
+                      % (iter, (los_cls + los_reg + los_seg * 10), los_cls, los_reg, los_seg * 10))
 
-                t1 = time.time()
-                self.sess.run([self.network.get_pred()[2],
-                               self.network.get_pred()[0]['f11_CPD'],
-                               self.network.get_pred()[1]['f11_CPD'],
-                               self.network.get_pred()[0]['f10_CPD'],
-                               self.network.get_pred()[1]['f10_CPD'],
-                               self.network.get_pred()[0]['f9_CPD'],
-                               self.network.get_pred()[1]['f9_CPD'],
-                               self.network.get_pred()[0]['f8_CPD'],
-                               self.network.get_pred()[1]['f8_CPD'],
-                               self.network.get_pred()[0]['f7_CPD'],
-                               self.network.get_pred()[1]['f7_CPD'],
-                               self.network.get_pred()[0]['f4_CPD'],
-                               self.network.get_pred()[1]['f4_CPD'],
-                               self.network.get_pred()[0]['f3_CPD'],
-                               self.network.get_pred()[1]['f3_CPD']],
-                              feed_dict={self.network.X: X_val_mb,
-                                         self.network.on_train: False,
-                                         self.network.batch_size: self.val_size
-                                         })
-                print('spend %f' % (time.time() - t1))
+                # t1 = time.time()
+                # self.sess.run([self.network.get_pred()[2],
+                #                self.network.get_pred()[0]['f11_CPD'],
+                #                self.network.get_pred()[1]['f11_CPD'],
+                #                self.network.get_pred()[0]['f10_CPD'],
+                #                self.network.get_pred()[1]['f10_CPD'],
+                #                self.network.get_pred()[0]['f9_CPD'],
+                #                self.network.get_pred()[1]['f9_CPD'],
+                #                self.network.get_pred()[0]['f8_CPD'],
+                #                self.network.get_pred()[1]['f8_CPD'],
+                #                self.network.get_pred()[0]['f7_CPD'],
+                #                self.network.get_pred()[1]['f7_CPD'],
+                #                self.network.get_pred()[0]['f4_CPD'],
+                #                self.network.get_pred()[1]['f4_CPD'],
+                #                self.network.get_pred()[0]['f3_CPD'],
+                #                self.network.get_pred()[1]['f3_CPD']],
+                #               feed_dict={self.network.X: X_val_mb,
+                #                          self.network.on_train: False,
+                #                          self.network.batch_size: self.val_size
+                #                          })
+                # print('spend %f' % (time.time() - t1))
 
+            print('opti iter%d...' % iter)
             Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size,
                                                                           iter * self.batch_size + self.batch_size])
+            if X_train_mb is None:
+                continue
+            actually_batch_size = X_train_mb.shape[0]
             Y_tain_mb_flatten = flatten_concat(Y_train_mb)
 
             self.sess.run(opti_dict, feed_dict={self.network.X: X_train_mb,
@@ -184,5 +192,5 @@ class Backbone_line(AssemblyLine):
                                                 self.network.Yreg: Y_tain_mb_flatten['reg_data'],
                                                 self.network.Yseg: Y_tain_mb_flatten['seg_data'],
                                                 self.network.on_train: True,
-                                                self.network.batch_size: self.batch_size
+                                                self.network.batch_size: actually_batch_size
                                                 })

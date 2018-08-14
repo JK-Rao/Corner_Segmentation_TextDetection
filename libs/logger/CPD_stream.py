@@ -22,7 +22,7 @@ class CPDWriter(TfWriter):
 
 
 def init_CPD_mask(shape, channel, mask_type):
-    print('init mask of %s' % mask_type)
+    # print('init mask of %s' % mask_type)
     gt_mask = None
     if mask_type == 'cls':
         for i in range(channel):
@@ -100,7 +100,7 @@ def ground_truth2feature_map(gt_array):
                                                                     [4, 8, 6, 10, 12, 16], 4, gt_rect[4])
     gt_seg_mask = gadget.project_feature_map_seg(gt_array, gt_seg_mask)
 
-    print (time.time() - t1)
+    # print (time.time() - t1)
     return {'cls_mask': [gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9,
                          gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, gt_cls_mask_f3],
             'reg_mask': [gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9,

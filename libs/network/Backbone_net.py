@@ -80,13 +80,13 @@ class Backbone_net(Network):
             f_mix.append({'tensor': f3, 'num': 6, 'name': 'f3_CPD'})
             self.setup_corner_point_dect(f_mix)
             self.setup_position_sen_seg(f_mix)
-            a=1
+            a = 1
 
     def flatten_tensor(self, tensor):
         return tf.reshape(tensor, [-1, tensor.get_shape().as_list()[-1]])
 
     def get_pred(self):
-        return self.detect_dict,self.off_dict,self.seg
+        return self.detect_dict, self.off_dict, self.seg
 
     def structure_loss(self):
         self.feed(self.detect_dict['f11_CPD'], 'flatten tensor x2') \
@@ -118,10 +118,11 @@ class Backbone_net(Network):
         OHEM_mask_cls = tf.cast(OHEM_mask, dtype=tf.bool)
         OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, cls_pos >= val[-1])
         OHEM_mask_cls = tf.cast(OHEM_mask_cls, dtype=tf.float32)
-        data_num=tf.reduce_sum(OHEM_mask_cls)
+        data_num = tf.reduce_sum(OHEM_mask_cls)
         # cls loss
-        epsilon=1e-8
-        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls+epsilon), axis=[1], keep_dims=True) * OHEM_mask_cls
+        epsilon = 1e-10
+        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls + epsilon), axis=[1],
+                                  keep_dims=True) * OHEM_mask_cls
         # reg loss
         delta_reg = tf.abs(flatten_pred_reg - self.Yreg)
         OHEM_mask = tf.cast(OHEM_mask, dtype=tf.float32)
@@ -129,17 +130,19 @@ class Backbone_net(Network):
         loss_reg = tf.reduce_sum(0.5 * tf.pow(delta_reg, 2) * smooth_l1_sign + \
                                  (delta_reg - 0.5) * (1 - smooth_l1_sign), axis=[1], keep_dims=True) * OHEM_mask
         # seg loss
-        loss_seg = 1 - tf.reduce_sum(2 * self.Yseg * flatten_pred_seg) / tf.reduce_sum(self.Yseg + flatten_pred_seg)
+        loss_seg = 1 - tf.reduce_sum((2 * (self.Yseg * flatten_pred_seg))) / \
+                   tf.reduce_sum(self.Yseg + (flatten_pred_seg))
+        # loss_seg=tf.norm(self.Yseg-flatten_pred_seg)/5000
 
-        return {'cls loss': tf.reduce_sum(loss_cls)/data_num,
-                'reg loss': tf.reduce_sum(loss_reg)/data_num,
+        return {'cls loss': tf.reduce_sum(loss_cls) / data_num,
+                'reg loss': tf.reduce_sum(loss_reg) / data_num,
                 'seg loss': loss_seg}
 
     def define_optimizer(self, loss_dict):
         backbone_vars = self.get_trainable_var('backbone')
         vgg_vars = self.get_trainable_var('vgg_16')
         total_vars = backbone_vars + vgg_vars
-        loss = tf.reduce_sum(loss_dict['cls loss']) + tf.reduce_sum(loss_dict['reg loss']) + loss_dict['seg loss']
+        loss = loss_dict['cls loss'] + loss_dict['reg loss'] + 10 * loss_dict['seg loss']
         optimizer = tf.train.AdamOptimizer(0.0001).minimize(loss,
                                                             global_step=self.global_step,
                                                             var_list=total_vars)
