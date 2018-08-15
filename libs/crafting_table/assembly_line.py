@@ -10,9 +10,8 @@ import cv2
 
 
 class AssemblyLine(object):
-    def __init__(self, config, graph, network):
+    def __init__(self, config, graph):
         self.sess = tf.Session(graph=graph, config=config)
-        self.network = network
         self.iter_num = 0
         self.summary_writer = None
 
@@ -36,6 +35,16 @@ class AssemblyLine(object):
             print('Error in close writer...')
         else:
             self.summary_writer.close()
+    @staticmethod
+    def average_gradients(tower_grads):
+        average_grads = list()
+        for grad_and_vars in zip(*tower_grads):
+            grads = [tf.expand_dims(g, 0) for g, _ in grad_and_vars]
+            grads = tf.concat(grads, axis=0)
+            grad = tf.reduce_mean(grads,axis=0)
+            grad_and_var = (grad, grad_and_vars[0][1])
+            average_grads.append(grad_and_var)
+        return average_grads
 
     def structure_train_context(self):
         raise NotImplementedError('Must be subclassed.')

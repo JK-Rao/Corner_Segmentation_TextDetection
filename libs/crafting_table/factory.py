@@ -8,6 +8,9 @@ from .DCGAN_line import DCGANLine
 from .Backbone_line import Backbone_line
 from ..network.factory import get_network
 from os.path import join
+import tensorflow as tf
+
+tf.reset_default_graph()
 
 
 def train_model(name, inster_number=None, annotation=None):
@@ -16,7 +19,7 @@ def train_model(name, inster_number=None, annotation=None):
         line = DCGANLine('train', info_dict)
         line.structure_train_context()
     elif name == 'CSTR':
-        line = Backbone_line(get_network('CSTR'))
+        line = Backbone_line()
         line.structure_train_context()
 
 

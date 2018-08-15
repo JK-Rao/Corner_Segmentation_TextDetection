@@ -12,15 +12,17 @@ import tensorflow.contrib.layers as layers
 import os
 import numpy as np
 
+tf.reset_default_graph()
+
 
 class Backbone_net(Network):
-    def __init__(self):
-        tf.reset_default_graph()
+    def __init__(self, reuse=False):
         self.graph = tf.get_default_graph()
         Network.__init__(self, 'backbone')
         self.IM_HEIGHT = 512
         self.IM_WIDTH = 512
         self.IM_CHANEL = 3
+        self.global_reuse = reuse
         self.global_step = tf.Variable(0, trainable=False)
         self.X = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, self.IM_CHANEL], name='X')
         self.Ycls = tf.placeholder(tf.float32, shape=[None, 2], name='Ycls')
@@ -44,13 +46,13 @@ class Backbone_net(Network):
     def setup(self, x, scope_name, reuse=False):
         conv5_3 = self.load_vgg_model()
         with tf.variable_scope(scope_name) as scope:
-            if reuse:
+            if self.global_reuse or reuse:
                 scope.reuse_variables()
             self.feed(conv5_3, 'abandon tensor') \
                 .relu('abandon tensor') \
-                .conv2d('abandon tensor', 1024, 3, 3, 2, 2, 'conv6_W', 'conv6_b') \
-                .relu('save tensor') \
-                .conv2d('abandon tensor', 1024, 1, 1, 2, 2, 'conv7_W', 'conv7_b') \
+                .conv2d('abandon tensor', 1024, 3, 3, 1, 1, 'conv6_W', 'conv6_b') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 1024, 1, 1, 1, 1, 'conv7_W', 'conv7_b') \
                 .relu('save tensor') \
                 .conv2d('abandon tensor', 256, 1, 1, 1, 1, 'conv8_1W', 'conv8_1b') \
                 .relu('abandon tensor') \
@@ -63,8 +65,11 @@ class Backbone_net(Network):
                 .conv2d('abandon tensor', 128, 1, 1, 1, 1, 'conv10_1W', 'conv10_1b') \
                 .relu('abandon tensor') \
                 .conv2d('abandon tensor', 256, 3, 3, 2, 2, 'conv10_2W', 'conv10_2b') \
+                .relu('save tensor') \
+                .conv2d('abandon tensor', 128, 1, 1, 1, 1, 'conv11_1W', 'conv11_1b') \
+                .relu('abandon tensor') \
+                .conv2d('abandon tensor', 256, 3, 3, 2, 2, 'conv11_2W', 'conv11_2b') \
                 .relu('save tensor')
-
             f11 = self.layer_tensor_demand()
             f10 = self.deconvolution_model([self.batch_size, 4, 4, 256], f11, self.layers[5], 'deconv_f10')
             f9 = self.deconvolution_model([self.batch_size, 8, 8, 256], f10, self.layers[4], 'deconv_f9')
@@ -153,17 +158,26 @@ class Backbone_net(Network):
                           'reg loss': tf.reduce_sum(loss_reg) / tf.cast(pos_num, tf.float32),
                           'seg loss': loss_seg}
 
-        return self.loss_dict, tf.reduce_sum(OHEM_mask), tf.reduce_sum(OHEM_mask_cls)
+        return self.loss_dict
 
+    @staticmethod
     def define_optimizer(self, loss_dict):
-        backbone_vars = self.get_trainable_var('backbone')
-        vgg_vars = self.get_trainable_var('vgg_16')
-        total_vars = backbone_vars + vgg_vars
+        # backbone_vars = self.get_trainable_var('backbone')
+        # vgg_vars = self.get_trainable_var('vgg_16')
+        # total_vars = backbone_vars + vgg_vars
+        total_vars = Backbone_net.obtain_vars(self, ['backbone', 'vgg_16'])
         loss = loss_dict['cls loss'] + loss_dict['reg loss'] + self.lamd * loss_dict['seg loss']
         optimizer = tf.train.AdamOptimizer(0.0001).minimize(loss,
                                                             global_step=self.global_step,
                                                             var_list=total_vars)
         return optimizer, total_vars
+
+    @staticmethod
+    def obtain_vars(self, var_names):
+        vars = list()
+        for var_name in var_names:
+            vars = vars + self.get_trainable_var(var_name)
+        return vars
 
     def setup_corner_point_dect(self, f):
         for f_in in f:
@@ -219,12 +233,20 @@ class Backbone_net(Network):
 
         return scor_pred, offs_pred
 
-    def deconvolution_model(self, deconv_size, deconv_layer, feature_layer, name):
-        self.feed(deconv_layer, 'abandon tensor') \
-            .deconv2d('abandon tensor', deconv_size, 2, 2, 2, 2, name + '_top_deconv_W', name + '_top_deconv_b') \
-            .conv2d('abandon tensor', 512, 3, 3, 1, 1, name + '_top_conv_W', name + '_top_conv_b') \
-            .normal('save tensor', self.on_train, 0.5, [0, 1, 2],
-                    name + '_top_scale', name + '_top_offset', name + '_top_mean', name + '_top_var')
+    def deconvolution_model(self, deconv_size, deconv_layer, feature_layer, name, scale_ratio='normal'):
+        if scale_ratio == 'normal':
+            self.feed(deconv_layer, 'abandon tensor') \
+                .deconv2d('abandon tensor', deconv_size, 2, 2, 2, 2, name + '_top_deconv_W', name + '_top_deconv_b') \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, name + '_top_conv_W', name + '_top_conv_b') \
+                .normal('save tensor', self.on_train, 0.5, [0, 1, 2],
+                        name + '_top_scale', name + '_top_offset', name + '_top_mean', name + '_top_var')
+        elif scale_ratio == '1X1':
+            self.feed(deconv_layer, 'abandon tensor') \
+                .deconv2d('abandon tensor', deconv_size, 3, 3, 1, 1, name + '_top_deconv_W', name + '_top_deconv_b',
+                          'VALID') \
+                .conv2d('abandon tensor', 512, 3, 3, 1, 1, name + '_top_conv_W', name + '_top_conv_b') \
+                .normal('save tensor', self.on_train, 0.5, [0, 1, 2],
+                        name + '_top_scale', name + '_top_offset', name + '_top_mean', name + '_top_var')
         top_tensor = self.layer_tensor_pop()
 
         self.feed(feature_layer, 'abandon tensor') \
@@ -250,7 +272,9 @@ class Backbone_net(Network):
 
     def load_vgg_model(self):
         graph = self.graph
-        with tf.variable_scope('vgg_16'):
+        with tf.variable_scope('vgg_16') as scope:
+            if self.global_reuse:
+                scope.reuse_variables()
             self.feed(self.X, 'abandon tensor') \
                 .conv2d('abandon tensor', 64, 3, 3, 1, 1, 'conv1/conv1_1/weights', 'conv1/conv1_1/biases') \
                 .relu('abandon tensor') \
@@ -281,7 +305,7 @@ class Backbone_net(Network):
                 .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_2/weights', 'conv5/conv5_2/biases') \
                 .relu('abandon tensor') \
                 .conv2d('abandon tensor', 512, 3, 3, 1, 1, 'conv5/conv5_3/weights', 'conv5/conv5_3/biases') \
-                .relu('abandon tensor')
+                .relu('save tensor')
         model_path = 'model/vgg_model/vgg_16.ckpt'
         assert (os.path.isfile(model_path))
 
@@ -295,4 +319,4 @@ class Backbone_net(Network):
         #     sess.run(tf.global_variables_initializer())
         #     init_vgg(sess)
 
-        return self.layer_tensor_demand()
+        return self.layer_tensor_pop()

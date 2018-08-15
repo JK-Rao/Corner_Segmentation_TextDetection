@@ -11,6 +11,8 @@ import numpy as np
 import time
 import cv2
 import copy
+from ..network.factory import get_network
+from ..network.Backbone_net import Backbone_net
 from os.path import join
 import os
 
@@ -47,15 +49,16 @@ def flatten_concat(stand_data):
 
 
 class Backbone_line(AssemblyLine):
-    def __init__(self, network):
-        AssemblyLine.__init__(self, self.get_config(), network.get_graph(), network)
+    def __init__(self):
+        AssemblyLine.__init__(self, self.get_config(), tf.get_default_graph())
         self.batch_size = 8
+        self.solo_batch_size = 8
         self.val_size = 1
-        self.IMG_CHANEL = self.network.IM_CHANEL
+        self.IMG_CHANEL = 3
 
     @staticmethod
     def get_config():
-        config = tf.ConfigProto()
+        config = tf.ConfigProto(allow_soft_placement=True)
         # config.gpu_options.allow_growth = True
         return config
 
@@ -120,86 +123,168 @@ class Backbone_line(AssemblyLine):
             cv2.waitKey()
 
     def structure_train_context(self):
-        loss_dict, OHEM, OHEM_cls = self.network.structure_loss()
-        opti_dict, total_vars = self.network.define_optimizer(loss_dict)
-        self.sess.run(tf.global_variables_initializer())
-        init_vgg16 = self.network.vgg16_initializer
-        init_vgg16(self.sess)
-        scale_table = [[256, 232, 208, 184],
-                       [124, 136, 148, 160],
-                       [88, 96, 104, 112],
-                       [56, 64, 72, 80],
-                       [36, 40, 44, 48],
-                       [20, 24, 28, 32],
-                       [4, 8, 6, 10, 12, 16]]
+        opti = tf.train.AdamOptimizer(0.0001)
+        tower_grads = list()
+        device_num = 4
+        self.solo_batch_size = self.batch_size // device_num
+        nets = list()
+        for i in range(device_num):
+            with tf.device('/gpu:%d' % i):
+                with tf.name_scope('GPU%d' % i):
+                    net = get_network('CSTR', global_reuse=False if i == 0 else True)
+                    nets.append(net)
+                    loss_dict = net.structure_loss()
+                    loss = loss_dict['cls loss'] + loss_dict['reg loss'] + net.lamd * loss_dict['seg loss']
+                    grads = opti.compute_gradients(loss)
+                    tower_grads.append(grads)
 
-        saver = self.get_saver(total_vars)
-        merged = self.create_summary('./data/logs/log_CSTR')
-        for iter in range(50000):
-            if iter % 50 == 0:
+        grads = self.average_gradients(tower_grads)
+        apply_gradinet_op = opti.apply_gradients(grads)
+
+        self.sess.run(tf.global_variables_initializer())
+        vgg16_initializer = nets[0].vgg16_initializer
+        vgg16_initializer(self.sess)
+
+        loss_dict_val = nets[0].structure_loss()
+
+        offset = 0
+        for iter in range(1000):
+            if iter % 10 == 0:
+                print('val testing...')
+                feed_dict_val=dict()
                 Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
                                                                           self.batch_size * 1000 + iter * self.val_size \
                                                                           + self.val_size])
                 if X_val_mb is None:
                     continue
                 actually_batch_size = X_val_mb.shape[0]
-                print('val testing...')
+
                 Y_val_mb_flatten = flatten_concat(Y_val_mb)
+                feed_dict_val[nets[0].X] = X_val_mb
+                feed_dict_val[nets[0].Ycls] = Y_val_mb_flatten['cls_data']
+                feed_dict_val[nets[0].Yreg] = Y_val_mb_flatten['reg_data']
+                feed_dict_val[nets[0].Yseg] = Y_val_mb_flatten['seg_data']
+                feed_dict_val[nets[0].on_train] = False
+                feed_dict_val[nets[0].batch_size] = actually_batch_size
+
                 # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
-                los_cls, los_reg, los_seg, mg, OHEM_data, OHEM_data_cls \
-                    = self.sess.run([loss_dict['cls loss'],
-                                     loss_dict['reg loss'],
-                                     loss_dict['seg loss'],
-                                     merged,
-                                     OHEM,
-                                     OHEM_cls],
-                                    feed_dict={self.network.X: X_val_mb,
-                                               self.network.Ycls: Y_val_mb_flatten['cls_data'],
-                                               self.network.Yreg: Y_val_mb_flatten['reg_data'],
-                                               self.network.Yseg: Y_val_mb_flatten['seg_data'],
-                                               self.network.on_train: False,
-                                               self.network.batch_size: actually_batch_size
-                                               })
+                los_cls, los_reg, los_seg \
+                    = self.sess.run([loss_dict_val['cls loss'],
+                                     loss_dict_val['reg loss'],
+                                     loss_dict_val['seg loss']],
+                                    feed_dict=feed_dict_val)
                 print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
-                      % (iter, (los_cls + los_reg + los_seg * self.network.lamd), los_cls, los_reg,
-                         los_seg * self.network.lamd))
-                self.iter_num = iter
-                self.write_summary(mg)
+                      % (iter, (los_cls + los_reg + los_seg * nets[0].lamd), los_cls, los_reg,
+                         los_seg * nets[0].lamd))
 
-                # t1 = time.time()
-                # self.sess.run([self.network.get_pred()[2],
-                #                self.network.get_pred()[0]['f11_CPD'],
-                #                self.network.get_pred()[1]['f11_CPD'],
-                #                self.network.get_pred()[0]['f10_CPD'],
-                #                self.network.get_pred()[1]['f10_CPD'],
-                #                self.network.get_pred()[0]['f9_CPD'],
-                #                self.network.get_pred()[1]['f9_CPD'],
-                #                self.network.get_pred()[0]['f8_CPD'],
-                #                self.network.get_pred()[1]['f8_CPD'],
-                #                self.network.get_pred()[0]['f7_CPD'],
-                #                self.network.get_pred()[1]['f7_CPD'],
-                #                self.network.get_pred()[0]['f4_CPD'],
-                #                self.network.get_pred()[1]['f4_CPD'],
-                #                self.network.get_pred()[0]['f3_CPD'],
-                #                self.network.get_pred()[1]['f3_CPD']],
-                #               feed_dict={self.network.X: X_val_mb,
-                #                          self.network.on_train: False,
-                #                          self.network.batch_size: self.val_size
-                #                          })
-                # print('spend %f' % (time.time() - t1))
-
+            # training scope
             print('opti iter%d...' % iter)
-            Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size,
-                                                                          iter * self.batch_size + self.batch_size])
-            if X_train_mb is None:
-                continue
-            actually_batch_size = X_train_mb.shape[0]
-            Y_tain_mb_flatten = flatten_concat(Y_train_mb)
+            t_iter_start = time.time()
+            stretch = self.batch_size
+            while True:
+                Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size + offset,
+                                                                              iter * self.batch_size + stretch + offset])
+                if X_train_mb is None:
+                    continue
+                actually_batch_size = X_train_mb.shape[0]
+                if actually_batch_size < self.batch_size:
+                    stretch += self.batch_size - actually_batch_size
+                    continue
+                break
 
-            self.sess.run(opti_dict, feed_dict={self.network.X: X_train_mb,
-                                                self.network.Ycls: Y_tain_mb_flatten['cls_data'],
-                                                self.network.Yreg: Y_tain_mb_flatten['reg_data'],
-                                                self.network.Yseg: Y_tain_mb_flatten['seg_data'],
-                                                self.network.on_train: True,
-                                                self.network.batch_size: actually_batch_size
-                                                })
+            feed_dict = dict()
+            for device_id in range(device_num):
+                Y_tain_mb_flatten = flatten_concat(Y_train_mb[device_id * self.solo_batch_size:
+                                                              (device_id + 1) * self.solo_batch_size])
+                feed_dict[nets[device_id].X] = X_train_mb[device_id * self.solo_batch_size:
+                                                          (device_id + 1) * self.solo_batch_size]
+                feed_dict[nets[device_id].Ycls] = Y_tain_mb_flatten['cls_data']
+                feed_dict[nets[device_id].Yreg] = Y_tain_mb_flatten['reg_data']
+                feed_dict[nets[device_id].Yseg] = Y_tain_mb_flatten['seg_data']
+                feed_dict[nets[device_id].on_train] = True
+                feed_dict[nets[device_id].batch_size] = self.solo_batch_size
+
+            t_iter_pre_opti = time.time()
+            self.sess.run(apply_gradinet_op, feed_dict=feed_dict)
+            print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
+                  % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
+            a = 1
+
+    # scale_table = [[256, 232, 208, 184],
+    #                [124, 136, 148, 160],
+    #                [88, 96, 104, 112],
+    #                [56, 64, 72, 80],
+    #                [36, 40, 44, 48],
+    #                [20, 24, 28, 32],
+    #                [4, 8, 6, 10, 12, 16]]
+    #
+    # saver = self.get_saver(total_vars)
+    # merged = self.create_summary('./data/logs/log_CSTR')
+    # for iter in range(50000):
+    #     if iter % 50 == 0:
+    #         Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
+    #                                                                   self.batch_size * 1000 + iter * self.val_size \
+    #                                                                   + self.val_size])
+    #         if X_val_mb is None:
+    #             continue
+    #         actually_batch_size = X_val_mb.shape[0]
+    #         print('val testing...')
+    #         Y_val_mb_flatten = flatten_concat(Y_val_mb)
+    #         # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
+    #         los_cls, los_reg, los_seg, mg, OHEM_data, OHEM_data_cls \
+    #             = self.sess.run([loss_dict['cls loss'],
+    #                              loss_dict['reg loss'],
+    #                              loss_dict['seg loss'],
+    #                              merged,
+    #                              OHEM,
+    #                              OHEM_cls],
+    #                             feed_dict={self.network.X: X_val_mb,
+    #                                        self.network.Ycls: Y_val_mb_flatten['cls_data'],
+    #                                        self.network.Yreg: Y_val_mb_flatten['reg_data'],
+    #                                        self.network.Yseg: Y_val_mb_flatten['seg_data'],
+    #                                        self.network.on_train: False,
+    #                                        self.network.batch_size: actually_batch_size
+    #                                        })
+    #         print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
+    #               % (iter, (los_cls + los_reg + los_seg * self.network.lamd), los_cls, los_reg,
+    #                  los_seg * self.network.lamd))
+    #         self.iter_num = iter
+    #         self.write_summary(mg)
+    #
+    #         # t1 = time.time()
+    #         # self.sess.run([self.network.get_pred()[2],
+    #         #                self.network.get_pred()[0]['f11_CPD'],
+    #         #                self.network.get_pred()[1]['f11_CPD'],
+    #         #                self.network.get_pred()[0]['f10_CPD'],
+    #         #                self.network.get_pred()[1]['f10_CPD'],
+    #         #                self.network.get_pred()[0]['f9_CPD'],
+    #         #                self.network.get_pred()[1]['f9_CPD'],
+    #         #                self.network.get_pred()[0]['f8_CPD'],
+    #         #                self.network.get_pred()[1]['f8_CPD'],
+    #         #                self.network.get_pred()[0]['f7_CPD'],
+    #         #                self.network.get_pred()[1]['f7_CPD'],
+    #         #                self.network.get_pred()[0]['f4_CPD'],
+    #         #                self.network.get_pred()[1]['f4_CPD'],
+    #         #                self.network.get_pred()[0]['f3_CPD'],
+    #         #                self.network.get_pred()[1]['f3_CPD']],
+    #         #               feed_dict={self.network.X: X_val_mb,
+    #         #                          self.network.on_train: False,
+    #         #                          self.network.batch_size: self.val_size
+    #         #                          })
+    #         # print('spend %f' % (time.time() - t1))
+    #
+    #     print('opti iter%d...' % iter)
+    #     Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size,
+    #                                                                   iter * self.batch_size + self.batch_size])
+    #     if X_train_mb is None:
+    #         continue
+    #     actually_batch_size = X_train_mb.shape[0]
+    #     Y_tain_mb_flatten = flatten_concat(Y_train_mb)
+    #
+    #     self.sess.run(opti_dict, feed_dict={self.network.X: X_train_mb,
+    #                                         self.network.Ycls: Y_tain_mb_flatten['cls_data'],
+    #                                         self.network.Yreg: Y_tain_mb_flatten['reg_data'],
+    #                                         self.network.Yseg: Y_tain_mb_flatten['seg_data'],
+    #                                         self.network.on_train: True,
+    #                                         self.network.batch_size: actually_batch_size
+    #                                         })
