@@ -53,7 +53,7 @@ class Backbone_line(AssemblyLine):
         AssemblyLine.__init__(self, self.get_config(), tf.get_default_graph())
         self.batch_size = 8
         self.solo_batch_size = 8
-        self.val_size = 2
+        self.val_size = 1
         self.IMG_CHANEL = 3
 
     @staticmethod
@@ -156,7 +156,9 @@ class Backbone_line(AssemblyLine):
                        [36, 40, 44, 48],
                        [20, 24, 28, 32],
                        [4, 8, 6, 10, 12, 16]]
-        for iter in range(1000):
+
+        merged = self.create_summary(nets[0].get_summary(),'./data/logs/log_CSTR')
+        for iter in range(90000):
             if iter % 10 == 0:
                 print('val testing...')
                 feed_dict_val = dict()
@@ -176,11 +178,14 @@ class Backbone_line(AssemblyLine):
                 feed_dict_val[nets[0].batch_size] = actually_batch_size
 
                 # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
-                los_cls, los_reg, los_seg \
+                los_cls, los_reg, los_seg ,mg\
                     = self.sess.run([loss_dict_val['cls loss'],
                                      loss_dict_val['reg loss'],
-                                     loss_dict_val['seg loss']],
+                                     loss_dict_val['seg loss'],
+                                     merged],
                                     feed_dict=feed_dict_val)
+                self.iter_num = iter
+                self.write_summary(mg)
                 print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
                       % (iter, (los_cls + los_reg + los_seg * nets[0].lamd), los_cls, los_reg,
                          los_seg * nets[0].lamd))
@@ -202,11 +207,11 @@ class Backbone_line(AssemblyLine):
                 break
 
             feed_dict = dict()
-            self.artificial_check(X_train_mb,Y_train_mb,scale_table)
+            # self.artificial_check(X_train_mb,Y_train_mb,scale_table)
             for device_id in range(device_num):
                 Y_tain_mb_flatten = flatten_concat(Y_train_mb[device_id * self.solo_batch_size:
                                                               (device_id + 1) * self.solo_batch_size])
-                print(np.sum(Y_tain_mb_flatten['cls_data'][:,1]))
+                # print(np.sum(Y_tain_mb_flatten['cls_data'][:,1]))
                 feed_dict[nets[device_id].X] = X_train_mb[device_id * self.solo_batch_size:
                                                           (device_id + 1) * self.solo_batch_size]
                 feed_dict[nets[device_id].Ycls] = Y_tain_mb_flatten['cls_data']
@@ -217,9 +222,12 @@ class Backbone_line(AssemblyLine):
 
             t_iter_pre_opti = time.time()
             self.sess.run(apply_gradinet_op, feed_dict=feed_dict)
-            print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
-                  % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
+            # print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
+            #       % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
+            print('optimizer update successful, iter:%d'
+                  % iter)
             a = 1
+        self.close_summary_writer()
 
     # scale_table = [[256, 232, 208, 184],
     #                [124, 136, 148, 160],

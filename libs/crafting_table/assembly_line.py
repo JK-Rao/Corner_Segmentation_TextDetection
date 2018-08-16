@@ -17,8 +17,8 @@ class AssemblyLine(object):
 
         self.sess.as_default()
 
-    def create_summary(self, log_path):
-        summ_dict = self.network.get_summary()
+    def create_summary(self, summ_dict,log_path):
+        # summ_dict = self.network.get_summary()
         merged = None
         for key in summ_dict:
             tf.summary.scalar(key, summ_dict[key])
