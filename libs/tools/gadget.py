@@ -69,8 +69,6 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
                                int(step_H * stride + stride / 2 + scal / 2)]
                 ins_score = calcul_iou(default_box, [int(left), int(top), int(right), int(bottom)])
                 if ins_score > threshold:
-                    if point_type == 0 and scal_index == 0:
-                        fc = 0
                     # print(ins_score)
                     # print(step_H, step_W, scal)
                     cent_dbox = [int((default_box[0] + default_box[2]) / 2),
@@ -80,6 +78,7 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
                     cls_map[0, step_H, step_W,
                     point_type * len(scale) * 2 + scal_index * 2:point_type * len(scale) * 2 + scal_index * 2 + 2] = \
                         [0, 1]
+
                     reg_map[0, step_H, step_W,
                     point_type * len(scale) * 4 + scal_index * 4:point_type * len(scale) * 4 + +scal_index * 4 + 4] = \
                         [(gt_rect[0] - cent_dbox[0]) / float(scal),
@@ -119,6 +118,20 @@ def project_feature_map_seg(gt_array, seg_map):
                                                    [np.array(points_list[i]).reshape([4, 2]).astype(np.int32)],
                                                    0, 1., cv2.FILLED)
     return seg_map
+
+
+def array2list_CSTR_dict(dict):
+    for batch in dict:
+        cls_list = batch['cls_mask']
+        for index, cls_array in enumerate(cls_list):
+            cls_list[index] = cls_array.tolist()
+        reg_list = batch['reg_mask']
+        for index, reg_array in enumerate(reg_list):
+            reg_list[index] = reg_array.tolist()
+        seg_list = batch['seg_mask']
+        for index, seg_array in enumerate(seg_list):
+            seg_list[index] = seg_array.tolist()
+    return dict
 
 
 if __name__ == '__main__':

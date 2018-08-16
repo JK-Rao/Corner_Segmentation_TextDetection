@@ -53,7 +53,7 @@ class Backbone_line(AssemblyLine):
         AssemblyLine.__init__(self, self.get_config(), tf.get_default_graph())
         self.batch_size = 8
         self.solo_batch_size = 8
-        self.val_size = 1
+        self.val_size = 2
         self.IMG_CHANEL = 3
 
     @staticmethod
@@ -148,10 +148,18 @@ class Backbone_line(AssemblyLine):
         loss_dict_val = nets[0].structure_loss()
 
         offset = 0
+
+        scale_table = [[256, 232, 208, 184],
+                       [124, 136, 148, 160],
+                       [88, 96, 104, 112],
+                       [56, 64, 72, 80],
+                       [36, 40, 44, 48],
+                       [20, 24, 28, 32],
+                       [4, 8, 6, 10, 12, 16]]
         for iter in range(1000):
             if iter % 10 == 0:
                 print('val testing...')
-                feed_dict_val=dict()
+                feed_dict_val = dict()
                 Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
                                                                           self.batch_size * 1000 + iter * self.val_size \
                                                                           + self.val_size])
@@ -184,6 +192,7 @@ class Backbone_line(AssemblyLine):
             while True:
                 Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size + offset,
                                                                               iter * self.batch_size + stretch + offset])
+                # break
                 if X_train_mb is None:
                     continue
                 actually_batch_size = X_train_mb.shape[0]
@@ -193,9 +202,11 @@ class Backbone_line(AssemblyLine):
                 break
 
             feed_dict = dict()
+            self.artificial_check(X_train_mb,Y_train_mb,scale_table)
             for device_id in range(device_num):
                 Y_tain_mb_flatten = flatten_concat(Y_train_mb[device_id * self.solo_batch_size:
                                                               (device_id + 1) * self.solo_batch_size])
+                print(np.sum(Y_tain_mb_flatten['cls_data'][:,1]))
                 feed_dict[nets[device_id].X] = X_train_mb[device_id * self.solo_batch_size:
                                                           (device_id + 1) * self.solo_batch_size]
                 feed_dict[nets[device_id].Ycls] = Y_tain_mb_flatten['cls_data']

@@ -9,6 +9,7 @@ from .data_pipeline import TfReader
 from .data_pipeline import TfWriter
 from ..tools import gadget
 import time
+from multiprocessing import Process, Queue
 
 
 class CPDReader(TfReader):
@@ -61,7 +62,7 @@ def gt_array2gt_rects(gt_array):
 
 # gt_array:A 3d tensor,[2,4,None]
 def ground_truth2feature_map(gt_array):
-    t1 = time.time()
+    t0 = time.time()
     # global gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9, gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, \
     #     gt_cls_mask_f3, gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9, gt_reg_mask_f8, gt_reg_mask_f7, gt_reg_mask_f4, \
     #     gt_reg_mask_f3, gt_seg_mask
@@ -98,9 +99,9 @@ def ground_truth2feature_map(gt_array):
                                                                     [20, 24, 28, 32], 8, gt_rect[4])
         gt_cls_mask_f3, gt_reg_mask_f3 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f3, gt_reg_mask_f3,
                                                                     [4, 8, 6, 10, 12, 16], 4, gt_rect[4])
+
     gt_seg_mask = gadget.project_feature_map_seg(gt_array, gt_seg_mask)
 
-    # print (time.time() - t1)
     return {'cls_mask': [gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9,
                          gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, gt_cls_mask_f3],
             'reg_mask': [gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9,

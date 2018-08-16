@@ -10,16 +10,19 @@ import scipy.io as sio
 import cv2
 from os.path import join
 import numpy as np
+import copy
 
 CPD_mat = sio.loadmat('./data/img_data/gt.mat')
+
+
 
 
 def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, filename=None):
     if model_name == 'DCGAN':
         return DCGAN_get_pipeline(sess, propose, batch_size, filename)
     elif model_name == 'CPD':
-        dicts = list()
         img_batch = None
+        dicts = list()
         if not batch_size is None:
             for i in range(batch_size[0], batch_size[1]):
                 img = cv2.imread(
@@ -28,12 +31,13 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
                 img = cv2.resize(img, (512, 512))
                 img = img[np.newaxis, :]
 
-                gt_array = CPD_mat['wordBB'][0][i]
+                gt_array = copy.deepcopy(CPD_mat['wordBB'][0][i])
                 gt_array[0] = gt_array[0] * 512. / img_width
                 gt_array[1] = gt_array[1] * 512. / img_height
                 gt_array.astype(np.int32)
                 if len(gt_array.shape) < 3:
-                    continue
+                    gt_array=gt_array.reshape((gt_array.shape[0],gt_array.shape[1],1))
+                    # continue
                 img_batch = img if img_batch is None else np.append(img_batch, img, axis=0)
                 dicts.append(ground_truth2feature_map(gt_array))
         else:
@@ -48,4 +52,7 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
             gt_array[1] = gt_array[1] * 512. / img_height
             gt_array.astype(np.int32)
             dicts.append(ground_truth2feature_map(gt_array))
+
+
+
         return dicts, img_batch
