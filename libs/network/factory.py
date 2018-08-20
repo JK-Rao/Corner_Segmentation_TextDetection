@@ -4,13 +4,12 @@
 # @Software  PyCharm
 # @Author    JK.Rao
 
-from .DCGANnet import DCGANnet
 from .Backbone_net import Backbone_net
 
 
 def get_network(name,global_reuse=False):
     if name == 'DCGAN':
-        return DCGANnet(['gen', 'dis'], [32, 20, 1])
+        a=1
     elif name == 'CSTR':
         return Backbone_net(global_reuse)
 

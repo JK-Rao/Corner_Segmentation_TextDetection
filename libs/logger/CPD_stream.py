@@ -66,16 +66,16 @@ def ground_truth2feature_map(gt_array):
     # global gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9, gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, \
     #     gt_cls_mask_f3, gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9, gt_reg_mask_f8, gt_reg_mask_f7, gt_reg_mask_f4, \
     #     gt_reg_mask_f3, gt_seg_mask
-    gt_cls_mask_f11 = init_CPD_mask([1, 2, 2, 1], 32, 'cls')
-    gt_cls_mask_f10 = init_CPD_mask([1, 4, 4, 1], 32, 'cls')
+    gt_cls_mask_f11 = init_CPD_mask([1, 4, 4, 1], 32, 'cls')
+    gt_cls_mask_f10 = init_CPD_mask([1, 6, 6, 1], 32, 'cls')
     gt_cls_mask_f9 = init_CPD_mask([1, 8, 8, 1], 32, 'cls')
     gt_cls_mask_f8 = init_CPD_mask([1, 16, 16, 1], 32, 'cls')
     gt_cls_mask_f7 = init_CPD_mask([1, 32, 32, 1], 32, 'cls')
     gt_cls_mask_f4 = init_CPD_mask([1, 64, 64, 1], 32, 'cls')
     gt_cls_mask_f3 = init_CPD_mask([1, 128, 128, 1], 48, 'cls')
 
-    gt_reg_mask_f11 = init_CPD_mask([1, 2, 2, 1], 64, 'reg')
-    gt_reg_mask_f10 = init_CPD_mask([1, 4, 4, 1], 64, 'reg')
+    gt_reg_mask_f11 = init_CPD_mask([1, 4, 4, 1], 64, 'reg')
+    gt_reg_mask_f10 = init_CPD_mask([1, 6, 6, 1], 64, 'reg')
     gt_reg_mask_f9 = init_CPD_mask([1, 8, 8, 1], 64, 'reg')
     gt_reg_mask_f8 = init_CPD_mask([1, 16, 16, 1], 64, 'reg')
     gt_reg_mask_f7 = init_CPD_mask([1, 32, 32, 1], 64, 'reg')
@@ -86,9 +86,12 @@ def ground_truth2feature_map(gt_array):
     gt_rects = gt_array2gt_rects(gt_array)
     for gt_rect in gt_rects:
         gt_cls_mask_f11, gt_reg_mask_f11 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f11, gt_reg_mask_f11,
-                                                                      [184, 208, 232, 256], 256, gt_rect[4])
+                                                                      [184, 208, 232, 256], 128, gt_rect[4])
+        for ss in range(16):
+            if np.max(gt_cls_mask_f11[:,:,:,ss*2+1])>0:
+                a=1
         gt_cls_mask_f10, gt_reg_mask_f10 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f10, gt_reg_mask_f10,
-                                                                      [124, 136, 148, 160], 128, gt_rect[4])
+                                                                      [124, 136, 148, 160], 85.33333, gt_rect[4])
         gt_cls_mask_f9, gt_reg_mask_f9 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f9, gt_reg_mask_f9,
                                                                     [88, 96, 104, 112], 64, gt_rect[4])
         gt_cls_mask_f8, gt_reg_mask_f8 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f8, gt_reg_mask_f8,

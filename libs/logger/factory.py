@@ -42,6 +42,7 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
                     # continue
                 img_batch = img if img_batch is None else np.append(img_batch, img, axis=0)
                 dicts.append(ground_truth2feature_map(gt_array))
+                print(i-batch_size[0])
         else:
             img = cv2.imread(join('/home/cj3/Downloads/im/SynthText', CPD_mat['imnames'][0][0][0].encode('gb18030')))
             img_height, img_width = img.shape[0:2]

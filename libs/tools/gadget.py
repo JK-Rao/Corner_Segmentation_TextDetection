@@ -88,6 +88,41 @@ def project_feature_map(gt_rect, cls_map, reg_map, scale, stride, point_type, th
     return cls_map, reg_map
 
 
+def init_template_f_in(scales, strides):
+    templet_f_in = np.zeros([7, 512, 512, 6, 4], dtype=np.int32)
+    templet_height_index = np.array(range(512) * 512).reshape([512, 512]).T
+    templet_width_index = np.array(range(512) * 512).reshape([512, 512])
+    for sca_index, scale in enumerate(scales):
+        for default_index, default_box in enumerate(scale):
+            templet_f_in[sca_index, :, :, default_index, 0] = (templet_width_index + 0.5) * strides[
+                sca_index] - default_box // 2
+            templet_f_in[sca_index, :, :, default_index, 1] = (templet_height_index + 0.5) * strides[
+                sca_index] - default_box // 2
+            templet_f_in[sca_index, :, :, default_index, 2] = (templet_width_index + 0.5) * strides[
+                sca_index] - default_box // 2
+            templet_f_in[sca_index, :, :, default_index, 3] = (templet_height_index + 0.5) * strides[
+                sca_index] - default_box // 2
+    return templet_f_in
+
+
+# gt_matrix: 2d tensor like:[[left, top, right, bottom],...]
+# cls_f_in:6d tensor like:[gt_s, scale, height, width, default box, [left, top, right, bottom]]
+# reg_map:4d tensor
+# scale:[scale of default box]
+# stride:stride of map
+# point_type:0-3
+# threshold:the threshold of iou
+def project_feature_map_matrix(gt_matrix, cls_map, reg_map, scales, strides, point_type, threshold=0.5):
+    cls_f_in = np.zeros([gt_matrix.shape[0], 7, 512, 512, 6, 4], dtype=np.int32)
+    # init
+    # for sca_index, scale in enumerate(scales):
+    #     cls_f_in[:, sca_index, :, :]
+
+    area_default_boxes = (cls_f_in[:, :, :, :, :, 2] - cls_f_in[:, :, :, :, :, 0]) * \
+                         (cls_f_in[:, :, :, :, :, 3] - cls_f_in[:, :, :, :, :, 1])
+    area_gt = ((gt_matrix[:, 2] - gt_matrix[:, 0]) * (gt_matrix[:, 3] - gt_matrix[:, 1])).reshape([-1, 1])
+    # valid_region =
+
 # gt_array:3d tensor shape like [2,4,?]
 # seg_map:4d tensor shape like [1,512,512,4]
 def project_feature_map_seg(gt_array, seg_map):

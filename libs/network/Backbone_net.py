@@ -27,7 +27,7 @@ class Backbone_net(Network):
         self.X = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, self.IM_CHANEL], name='X')
         self.Ycls = tf.placeholder(tf.float32, shape=[None, 2], name='Ycls')
         self.Yreg = tf.placeholder(tf.float32, shape=[None, 4], name='Yreg')
-        self.Yseg = tf.placeholder(tf.float32, shape=[None,1], name='Yseg')
+        self.Yseg = tf.placeholder(tf.float32, shape=[None, 1], name='Yseg')
 
         self.on_train = tf.placeholder(tf.bool, [], name='on_train')
         self.batch_size = tf.placeholder(tf.int32, name='batch_size')
@@ -64,15 +64,15 @@ class Backbone_net(Network):
                 .relu('save tensor') \
                 .conv2d('abandon tensor', 128, 1, 1, 1, 1, 'conv10_1W', 'conv10_1b') \
                 .relu('abandon tensor') \
-                .conv2d('abandon tensor', 256, 3, 3, 2, 2, 'conv10_2W', 'conv10_2b') \
+                .conv2d('abandon tensor', 256, 3, 3, 1, 1, 'conv10_2W', 'conv10_2b', 'VALID') \
                 .relu('save tensor') \
                 .conv2d('abandon tensor', 128, 1, 1, 1, 1, 'conv11_1W', 'conv11_1b') \
                 .relu('abandon tensor') \
-                .conv2d('abandon tensor', 256, 3, 3, 2, 2, 'conv11_2W', 'conv11_2b') \
+                .conv2d('abandon tensor', 256, 3, 3, 1, 1, 'conv11_2W', 'conv11_2b', 'VALID') \
                 .relu('save tensor')
             f11 = self.layer_tensor_demand()
-            f10 = self.deconvolution_model([self.batch_size, 4, 4, 256], f11, self.layers[5], 'deconv_f10')
-            f9 = self.deconvolution_model([self.batch_size, 8, 8, 256], f10, self.layers[4], 'deconv_f9')
+            f10 = self.deconvolution_model([self.batch_size, 6, 6, 256], f11, self.layers[5], 'deconv_f10', '1X1')
+            f9 = self.deconvolution_model([self.batch_size, 8, 8, 256], f10, self.layers[4], 'deconv_f9', '1X1')
             f8 = self.deconvolution_model([self.batch_size, 16, 16, 256], f9, self.layers[3], 'deconv_f8')
             f7 = self.deconvolution_model([self.batch_size, 32, 32, 256], f8, self.layers[2], 'deconv_f7')
             f4 = self.deconvolution_model([self.batch_size, 64, 64, 256], f7, self.layers[1], 'deconv_f4')
@@ -135,7 +135,7 @@ class Backbone_net(Network):
         flatten_pred_cls_neg = tf.where(tf.reshape(tf.cast(OHEM_mask, tf.bool), shape=[-1]),
                                         tf.zeros_like(flatten_pred_cls[:, 1], dtype=tf.float32),
                                         flatten_pred_cls[:, 1])
-        val, index = tf.nn.top_k(flatten_pred_cls_neg, k=tf.maximum(neg_num,1))
+        val, index = tf.nn.top_k(flatten_pred_cls_neg, k=tf.maximum(neg_num, 1))
         cls_pos = tf.reshape(flatten_pred_cls[:, 1], shape=[-1, 1])
         OHEM_mask_cls = tf.cast(OHEM_mask, dtype=tf.bool)
         OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, cls_pos >= val[-1])
@@ -143,8 +143,8 @@ class Backbone_net(Network):
         # data_num = tf.reduce_sum(OHEM_mask_cls)
         # cls loss
         epsilon = 1e-10
-        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls+epsilon), axis=[1],
-                                  keep_dims=True)*OHEM_mask_cls
+        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls + epsilon), axis=[1],
+                                  keep_dims=True) * OHEM_mask_cls
         # reg loss
         delta_reg = tf.abs(flatten_pred_reg - self.Yreg)
         OHEM_mask = tf.cast(OHEM_mask, dtype=tf.float32)
@@ -156,8 +156,6 @@ class Backbone_net(Network):
         loss_seg = 1 - tf.reduce_sum((2 * (self.Yseg * flatten_pred_seg))) / \
                    tf.reduce_sum(self.Yseg + (flatten_pred_seg))
         # loss_seg=tf.norm(self.Yseg-flatten_pred_seg)/5000
-
-
 
         self.loss_dict = {'cls loss': tf.reduce_sum(loss_cls) / (tf.cast(pos_num, tf.float32)),
                           'reg loss': tf.reduce_sum(loss_reg) / tf.cast(pos_num, tf.float32),
@@ -204,7 +202,7 @@ class Backbone_net(Network):
                       'PSS_deconv_1_b') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, 'PSS_conv_2_W', 'PSS_conv_2_b') \
             .relu('abandon tensor') \
-            .deconv2d('abandon tensor', [self.batch_size, 512, 512, 4], 2, 2, 2, 2, 'PSS_deconv_2_W', 'PSS_deconv_2_b')\
+            .deconv2d('abandon tensor', [self.batch_size, 512, 512, 4], 2, 2, 2, 2, 'PSS_deconv_2_W', 'PSS_deconv_2_b') \
             .sigmoid('save tensor')
         pss_pred = self.layer_tensor_pop()
         self.seg = pss_pred

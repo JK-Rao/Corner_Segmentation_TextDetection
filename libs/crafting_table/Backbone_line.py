@@ -55,7 +55,7 @@ class Backbone_line(AssemblyLine):
         AssemblyLine.__init__(self, self.get_config(), tf.get_default_graph())
         self.batch_size = 8
         self.solo_batch_size = 8
-        self.val_size = 1
+        self.val_size = 2
         self.IMG_CHANEL = 3
 
     @staticmethod
@@ -109,12 +109,12 @@ class Backbone_line(AssemblyLine):
                     for orde, ind in enumerate(index_img):
                         # regression check
                         reg_val = reg_map[index[orde][0], index[orde][1], 4 * scale_type:4 * scale_type + 4]
-                        # Dx = reg_val[0] * default_box_width
-                        # Dy = reg_val[1] * default_box_width
-                        # Ss = int(np.exp(reg_val[2]) * default_box_width)
-                        Dy=0
-                        Dx=0
-                        Ss = default_box_width
+                        Dx = reg_val[0] * default_box_width
+                        Dy = reg_val[1] * default_box_width
+                        Ss = int(np.exp(reg_val[2]) * default_box_width)
+                        # Dy=0
+                        # Dx=0
+                        # Ss = default_box_width
                         ind[1] = ind[1] + Dx
                         ind[0] = ind[0] + Dy
                         # detection
@@ -157,7 +157,7 @@ class Backbone_line(AssemblyLine):
 
         offset = 0
 
-        scale_table = [[256, 232, 208, 184],
+        scale_table = [[   184,208,232,256],
                        [124, 136, 148, 160],
                        [88, 96, 104, 112],
                        [56, 64, 72, 80],
@@ -175,7 +175,7 @@ class Backbone_line(AssemblyLine):
                                                                           self.batch_size * 1000 + iter * self.val_size \
                                                                           + self.val_size])
 
-                # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
+                self.artificial_check(X_val_mb, Y_val_mb, scale_table)
                 if X_val_mb is None:
                     continue
                 actually_batch_size = X_val_mb.shape[0]
