@@ -48,7 +48,7 @@ def init_CPD_mask(shape, channel, mask_type):
 def gt_array2gt_rects(gt_array):
     gt_rects = list()
     for i in range(gt_array.shape[2]):
-        if np.max(gt_array[:, :, i]) > 512:
+        if np.min(gt_array[:, :, i]) > 512:
             continue
         ssl = np.sqrt((gt_array[0, 3, i] - gt_array[0, 0, i]) ** 2 + (gt_array[1, 3, i] - gt_array[1, 0, i]) ** 2)
         sst = np.sqrt((gt_array[0, 1, i] - gt_array[0, 0, i]) ** 2 + (gt_array[1, 1, i] - gt_array[1, 0, i]) ** 2)

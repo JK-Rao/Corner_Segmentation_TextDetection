@@ -42,6 +42,8 @@ def flatten_concat(stand_data):
         if not process_one_scale:
             seg_data = np.reshape(seg_data_scale, [-1, 1]) if seg_data is None \
                 else np.append(seg_data, np.reshape(seg_data_scale, [-1, 1]), axis=0)
+            # seg_data = seg_data_scale if seg_data is None \
+            #     else np.append(seg_data, seg_data_scale)
             process_one_scale = True
     return {'cls_data': cls_data,
             'reg_data': reg_data,
@@ -97,23 +99,25 @@ class Backbone_line(AssemblyLine):
                     index_img = index * int(256 / (2 ** scale)) + int(256 / (2 ** scale)) / 2
 
                     if scale_type / point_type_len == 0:
-                        color = (0, 0, 255)
+                        color = (255, 0, 0)
                     elif scale_type / point_type_len == 1:
                         color = (0, 255, 0)
                     elif scale_type / point_type_len == 2:
-                        color = (255, 0, 0)
+                        color = (0, 0, 255)
                     elif scale_type / point_type_len == 3:
                         color = (255, 0, 255)
                     for orde, ind in enumerate(index_img):
                         # regression check
                         reg_val = reg_map[index[orde][0], index[orde][1], 4 * scale_type:4 * scale_type + 4]
-                        Dx = reg_val[0] * default_box_width
-                        Dy = reg_val[1] * default_box_width
-                        Ss = int(np.exp(reg_val[2]) * default_box_width)
+                        # Dx = reg_val[0] * default_box_width
+                        # Dy = reg_val[1] * default_box_width
+                        # Ss = int(np.exp(reg_val[2]) * default_box_width)
+                        Dy=0
+                        Dx=0
+                        Ss = default_box_width
                         ind[1] = ind[1] + Dx
                         ind[0] = ind[0] + Dy
                         # detection
-                        # print(ind[1],ind[0])
                         cv2.circle(dyeing_X, (ind[1], ind[0]), 2, color, 2)
                         rect_lt = (ind[1] - Ss // 2, ind[0] - Ss // 2)
                         rect_rb = (ind[1] + Ss // 2, ind[0] + Ss // 2)
@@ -125,27 +129,31 @@ class Backbone_line(AssemblyLine):
     def structure_train_context(self):
         opti = tf.train.AdamOptimizer(0.0001)
         tower_grads = list()
-        device_num = 4
+        device_num = 1
         self.solo_batch_size = self.batch_size // device_num
         nets = list()
+        test_loss = None
         for i in range(device_num):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('GPU%d' % i):
                     net = get_network('CSTR', global_reuse=False if i == 0 else True)
                     nets.append(net)
                     loss_dict = net.structure_loss()
-                    loss = loss_dict['cls loss'] + loss_dict['reg loss'] + net.lamd * loss_dict['seg loss']
-                    grads = opti.compute_gradients(loss)
-                    tower_grads.append(grads)
+                    # loss =tf.constant(0.)* loss_dict['cls loss'] + tf.constant(0.)*loss_dict['reg loss'] + tf.constant(0.) * loss_dict['seg loss']
+                    loss = loss_dict['cls loss']
+                    test_loss = loss
+                    # grads = opti.compute_gradients(loss)
+                    # tower_grads.append(grads)
 
-        grads = self.average_gradients(tower_grads)
-        apply_gradinet_op = opti.apply_gradients(grads)
+        # grads = self.average_gradients(tower_grads)
+        # apply_gradinet_op = opti.apply_gradients(grads)
+        test_op = tf.train.AdamOptimizer(0.0001).minimize(test_loss)
 
         self.sess.run(tf.global_variables_initializer())
         vgg16_initializer = nets[0].vgg16_initializer
         vgg16_initializer(self.sess)
 
-        loss_dict_val = nets[0].structure_loss()
+        # loss_dict_val = nets[0].structure_loss()
 
         offset = 0
 
@@ -157,14 +165,17 @@ class Backbone_line(AssemblyLine):
                        [20, 24, 28, 32],
                        [4, 8, 6, 10, 12, 16]]
 
-        merged = self.create_summary(nets[0].get_summary(),'./data/logs/log_CSTR')
+        merged = self.create_summary(nets[0].get_summary(), './data/logs/log_CSTR_2_cls_lr:0.0001_zero')
         for iter in range(90000):
+            feed_dict_val = None
             if iter % 10 == 0:
                 print('val testing...')
                 feed_dict_val = dict()
                 Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
                                                                           self.batch_size * 1000 + iter * self.val_size \
                                                                           + self.val_size])
+
+                # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
                 if X_val_mb is None:
                     continue
                 actually_batch_size = X_val_mb.shape[0]
@@ -177,18 +188,17 @@ class Backbone_line(AssemblyLine):
                 feed_dict_val[nets[0].on_train] = False
                 feed_dict_val[nets[0].batch_size] = actually_batch_size
 
-                # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
-                los_cls, los_reg, los_seg ,mg\
-                    = self.sess.run([loss_dict_val['cls loss'],
-                                     loss_dict_val['reg loss'],
-                                     loss_dict_val['seg loss'],
+                los_cls, los_reg, los_seg, mg\
+                    = self.sess.run([test_loss,
+                                     test_loss,
+                                     test_loss,
                                      merged],
                                     feed_dict=feed_dict_val)
                 self.iter_num = iter
                 self.write_summary(mg)
                 print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
-                      % (iter, (los_cls + los_reg + los_seg * nets[0].lamd), los_cls, los_reg,
-                         los_seg * nets[0].lamd))
+                      % (iter, (los_cls + los_reg + los_seg), los_cls, los_reg,
+                         los_seg))
 
             # training scope
             print('opti iter%d...' % iter)
@@ -203,6 +213,7 @@ class Backbone_line(AssemblyLine):
                 actually_batch_size = X_train_mb.shape[0]
                 if actually_batch_size < self.batch_size:
                     stretch += self.batch_size - actually_batch_size
+                    print('Error!!!!!!!!!!!!!')
                     continue
                 break
 
@@ -221,11 +232,11 @@ class Backbone_line(AssemblyLine):
                 feed_dict[nets[device_id].batch_size] = self.solo_batch_size
 
             t_iter_pre_opti = time.time()
-            self.sess.run(apply_gradinet_op, feed_dict=feed_dict)
+            _, train_loss = self.sess.run([test_op, test_loss], feed_dict=feed_dict)
             # print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
             #       % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
-            print('optimizer update successful, iter:%d'
-                  % iter)
+            print('optimizer update successful, iter:%d loss:%f'
+                  % (iter, train_loss))
             a = 1
         self.close_summary_writer()
 

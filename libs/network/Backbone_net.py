@@ -27,7 +27,7 @@ class Backbone_net(Network):
         self.X = tf.placeholder(tf.float32, shape=[None, self.IM_HEIGHT, self.IM_WIDTH, self.IM_CHANEL], name='X')
         self.Ycls = tf.placeholder(tf.float32, shape=[None, 2], name='Ycls')
         self.Yreg = tf.placeholder(tf.float32, shape=[None, 4], name='Yreg')
-        self.Yseg = tf.placeholder(tf.float32, shape=[None, 1], name='Yseg')
+        self.Yseg = tf.placeholder(tf.float32, shape=[None,1], name='Yseg')
 
         self.on_train = tf.placeholder(tf.bool, [], name='on_train')
         self.batch_size = tf.placeholder(tf.int32, name='batch_size')
@@ -39,7 +39,7 @@ class Backbone_net(Network):
         self.vgg16_initializer = None
 
         self.loss_dict = None
-        self.lamd = 0
+        self.lamd = 10
 
         self.setup(self.X, 'backbone')
 
@@ -122,18 +122,20 @@ class Backbone_net(Network):
             .concat_tensor(self.off_dict['f4_CPD'], 4) \
             .concat_tensor(self.off_dict['f3_CPD'], 4)
         flatten_pred_reg = self.pre_process_tensor
+        pred_seg = self.seg
         self.feed(self.seg, 'flatten tensor x1')
         flatten_pred_seg = self.pre_process_tensor
 
         OHEM_mask = self.Ycls[:, 1] >= 1
         # OHEM_mask = tf.logical_or(OHEM_mask, self.Ycls[:, 1] >= 1)
         OHEM_mask = tf.reshape(tf.cast(OHEM_mask, dtype=tf.int32), shape=[-1, 1])
+
         pos_num = tf.reduce_sum(OHEM_mask)
         neg_num = pos_num * 3
         flatten_pred_cls_neg = tf.where(tf.reshape(tf.cast(OHEM_mask, tf.bool), shape=[-1]),
                                         tf.zeros_like(flatten_pred_cls[:, 1], dtype=tf.float32),
                                         flatten_pred_cls[:, 1])
-        val, index = tf.nn.top_k(flatten_pred_cls_neg, k=neg_num)
+        val, index = tf.nn.top_k(flatten_pred_cls_neg, k=tf.maximum(neg_num,1))
         cls_pos = tf.reshape(flatten_pred_cls[:, 1], shape=[-1, 1])
         OHEM_mask_cls = tf.cast(OHEM_mask, dtype=tf.bool)
         OHEM_mask_cls = tf.logical_or(OHEM_mask_cls, cls_pos >= val[-1])
@@ -141,20 +143,23 @@ class Backbone_net(Network):
         # data_num = tf.reduce_sum(OHEM_mask_cls)
         # cls loss
         epsilon = 1e-10
-        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls + epsilon), axis=[1],
-                                  keep_dims=True) * OHEM_mask_cls
+        loss_cls = -tf.reduce_sum(self.Ycls * tf.log(flatten_pred_cls+epsilon), axis=[1],
+                                  keep_dims=True)*OHEM_mask_cls
         # reg loss
         delta_reg = tf.abs(flatten_pred_reg - self.Yreg)
         OHEM_mask = tf.cast(OHEM_mask, dtype=tf.float32)
         smooth_l1_sign = tf.cast(tf.reshape(delta_reg < 1, shape=[-1, 4]), dtype=tf.float32)
-        loss_reg = tf.reduce_sum(0.5 * tf.pow(delta_reg, 2) * smooth_l1_sign + \
+        loss_reg = tf.reduce_sum(0.5 * tf.pow(delta_reg, 2) * smooth_l1_sign +
                                  (delta_reg - 0.5) * (1 - smooth_l1_sign), axis=[1], keep_dims=True) * OHEM_mask
         # seg loss
+        # loss_seg = tf.reduce_mean(1 - ((2 * self.Yseg * pred_seg) /(self.Yseg + pred_seg)))
         loss_seg = 1 - tf.reduce_sum((2 * (self.Yseg * flatten_pred_seg))) / \
                    tf.reduce_sum(self.Yseg + (flatten_pred_seg))
         # loss_seg=tf.norm(self.Yseg-flatten_pred_seg)/5000
 
-        self.loss_dict = {'cls loss': tf.reduce_sum(loss_cls) / tf.cast(pos_num, tf.float32),
+
+
+        self.loss_dict = {'cls loss': tf.reduce_sum(loss_cls) / (tf.cast(pos_num, tf.float32)),
                           'reg loss': tf.reduce_sum(loss_reg) / tf.cast(pos_num, tf.float32),
                           'seg loss': loss_seg}
 
@@ -199,7 +204,8 @@ class Backbone_net(Network):
                       'PSS_deconv_1_b') \
             .conv2d('abandon tensor', 256, 1, 1, 1, 1, 'PSS_conv_2_W', 'PSS_conv_2_b') \
             .relu('abandon tensor') \
-            .deconv2d('save tensor', [self.batch_size, 512, 512, 4], 2, 2, 2, 2, 'PSS_deconv_2_W', 'PSS_deconv_2_b')
+            .deconv2d('abandon tensor', [self.batch_size, 512, 512, 4], 2, 2, 2, 2, 'PSS_deconv_2_W', 'PSS_deconv_2_b')\
+            .sigmoid('save tensor')
         pss_pred = self.layer_tensor_pop()
         self.seg = pss_pred
 
