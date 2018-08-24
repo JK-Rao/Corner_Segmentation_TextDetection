@@ -131,7 +131,7 @@ class Backbone_line(AssemblyLine):
     def structure_train_context(self):
         opti = tf.train.AdamOptimizer(0.0001)
         tower_grads = list()
-        device_num = 1
+        device_num = 4
         self.solo_batch_size = self.batch_size // device_num
         nets = list()
         test_loss = None
@@ -141,15 +141,16 @@ class Backbone_line(AssemblyLine):
                     net = get_network('CSTR', global_reuse=False if i == 0 else True)
                     nets.append(net)
                     loss_dict = net.structure_loss()
-                    # loss =tf.constant(0.)* loss_dict['cls loss'] + tf.constant(0.)*loss_dict['reg loss'] + tf.constant(0.) * loss_dict['seg loss']
-                    loss = loss_dict['cls loss']
-                    test_loss = loss
-                    # grads = opti.compute_gradients(loss)
-                    # tower_grads.append(grads)
+                    loss =loss_dict['cls loss'] + 0*loss_dict['reg loss'] + 0 * loss_dict['seg loss']
+                    # loss = loss_dict['cls loss']
+                    if i ==0:
+                        test_loss = loss
+                    grads = opti.compute_gradients(loss)
+                    tower_grads.append(grads)
 
-        # grads = self.average_gradients(tower_grads)
-        # apply_gradinet_op = opti.apply_gradients(grads)
-        test_op = tf.train.AdamOptimizer(0.0001).minimize(test_loss)
+        grads = self.average_gradients(tower_grads)
+        apply_gradinet_op = opti.apply_gradients(grads)
+        # test_op = tf.train.AdamOptimizer(0.0001).minimize(test_loss)
 
         self.sess.run(tf.global_variables_initializer())
         vgg16_initializer = nets[0].vgg16_initializer
@@ -235,9 +236,9 @@ class Backbone_line(AssemblyLine):
                 feed_dict[nets[device_id].batch_size] = self.solo_batch_size
 
             t_iter_pre_opti = time.time()
-            _, train_loss = self.sess.run([test_op, test_loss], feed_dict=feed_dict)
-            # print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
-            #       % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
+            _, train_loss = self.sess.run([apply_gradinet_op, test_loss], feed_dict=feed_dict)
+            print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
+                  % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
             print('optimizer update successful, iter:%d loss:%f'
                   % (iter, train_loss))
             a = 1
