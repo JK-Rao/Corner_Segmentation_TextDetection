@@ -65,6 +65,7 @@ class Backbone_line(AssemblyLine):
         return config
 
     def artificial_check(self, X_mb, Y_mb, scale_table):
+        strides = [128, 85.3333, 64, 32, 16, 8, 4]
         # show imgs
         for img_index in range(X_mb.shape[0]):
             dyeing_X = copy.deepcopy(X_mb[img_index])
@@ -96,7 +97,8 @@ class Backbone_line(AssemblyLine):
                     default_box_width = scale_table[scale][scale_type % point_type_len]
                     index = np.where(cls_map[:, :, scale_type * 2 + 1] > 0.5)
                     index = np.array(index).T
-                    index_img = index * int(256 / (2 ** scale)) + int(256 / (2 ** scale)) / 2
+                    # index_img = index * int(256 / (2 ** scale)) + int(256 / (2 ** scale)) / 2
+                    index_img = index * int(strides[scale]) + int(strides[scale] / 2)
 
                     if scale_type / point_type_len == 0:
                         color = (255, 0, 0)
@@ -157,7 +159,7 @@ class Backbone_line(AssemblyLine):
 
         offset = 0
 
-        scale_table = [[   184,208,232,256],
+        scale_table = [[184, 208, 232, 256],
                        [124, 136, 148, 160],
                        [88, 96, 104, 112],
                        [56, 64, 72, 80],
@@ -175,7 +177,7 @@ class Backbone_line(AssemblyLine):
                                                                           self.batch_size * 1000 + iter * self.val_size \
                                                                           + self.val_size])
 
-                self.artificial_check(X_val_mb, Y_val_mb, scale_table)
+                # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
                 if X_val_mb is None:
                     continue
                 actually_batch_size = X_val_mb.shape[0]
@@ -188,7 +190,7 @@ class Backbone_line(AssemblyLine):
                 feed_dict_val[nets[0].on_train] = False
                 feed_dict_val[nets[0].batch_size] = actually_batch_size
 
-                los_cls, los_reg, los_seg, mg\
+                los_cls, los_reg, los_seg, mg \
                     = self.sess.run([test_loss,
                                      test_loss,
                                      test_loss,
@@ -220,6 +222,7 @@ class Backbone_line(AssemblyLine):
             feed_dict = dict()
             # self.artificial_check(X_train_mb,Y_train_mb,scale_table)
             for device_id in range(device_num):
+    # test = init_template_f_in(scale_table, [128, 85.3333, 64, 32, 16, 8, 4])
                 Y_tain_mb_flatten = flatten_concat(Y_train_mb[device_id * self.solo_batch_size:
                                                               (device_id + 1) * self.solo_batch_size])
                 # print(np.sum(Y_tain_mb_flatten['cls_data'][:,1]))

@@ -12,6 +12,7 @@ from os.path import join
 import numpy as np
 import copy
 import random
+import time
 
 CPD_mat = sio.loadmat('./data/img_data/gt.mat')
 sampling_list = range(CPD_mat['imnames'].shape[1])
@@ -22,6 +23,7 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
     if model_name == 'DCGAN':
         return DCGAN_get_pipeline(sess, propose, batch_size, filename)
     elif model_name == 'CPD':
+        t0 = time.time()
         img_batch = None
         dicts = list()
         if not batch_size is None:
@@ -42,7 +44,7 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
                     # continue
                 img_batch = img if img_batch is None else np.append(img_batch, img, axis=0)
                 dicts.append(ground_truth2feature_map(gt_array))
-                print(i-batch_size[0])
+
         else:
             img = cv2.imread(join('/home/cj3/Downloads/im/SynthText', CPD_mat['imnames'][0][0][0].encode('gb18030')))
             img_height, img_width = img.shape[0:2]
@@ -56,4 +58,5 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
             gt_array.astype(np.int32)
             dicts.append(ground_truth2feature_map(gt_array))
 
+        # print('propcess spend %fs for 8 imgs.' % (time.time() - t0))
         return dicts, img_batch

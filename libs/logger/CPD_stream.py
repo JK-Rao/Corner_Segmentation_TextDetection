@@ -9,6 +9,7 @@ from .data_pipeline import TfReader
 from .data_pipeline import TfWriter
 from ..tools import gadget
 import time
+import copy
 from multiprocessing import Process, Queue
 
 
@@ -60,53 +61,76 @@ def gt_array2gt_rects(gt_array):
     return gt_rects
 
 
+gt_cls_mask_f11 = init_CPD_mask([1, 4, 4, 1], 32, 'cls')
+gt_cls_mask_f10 = init_CPD_mask([1, 6, 6, 1], 32, 'cls')
+gt_cls_mask_f9 = init_CPD_mask([1, 8, 8, 1], 32, 'cls')
+gt_cls_mask_f8 = init_CPD_mask([1, 16, 16, 1], 32, 'cls')
+gt_cls_mask_f7 = init_CPD_mask([1, 32, 32, 1], 32, 'cls')
+gt_cls_mask_f4 = init_CPD_mask([1, 64, 64, 1], 32, 'cls')
+gt_cls_mask_f3 = init_CPD_mask([1, 128, 128, 1], 48, 'cls')
+
+gt_reg_mask_f11 = init_CPD_mask([1, 4, 4, 1], 64, 'reg')
+gt_reg_mask_f10 = init_CPD_mask([1, 6, 6, 1], 64, 'reg')
+gt_reg_mask_f9 = init_CPD_mask([1, 8, 8, 1], 64, 'reg')
+gt_reg_mask_f8 = init_CPD_mask([1, 16, 16, 1], 64, 'reg')
+gt_reg_mask_f7 = init_CPD_mask([1, 32, 32, 1], 64, 'reg')
+gt_reg_mask_f4 = init_CPD_mask([1, 64, 64, 1], 64, 'reg')
+gt_reg_mask_f3 = init_CPD_mask([1, 128, 128, 1], 96, 'reg')
+
+gt_seg_mask = init_CPD_mask([1, 512, 512, 1], 4, 'seg')
+
+
 # gt_array:A 3d tensor,[2,4,None]
 def ground_truth2feature_map(gt_array):
-    t0 = time.time()
-    # global gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9, gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, \
-    #     gt_cls_mask_f3, gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9, gt_reg_mask_f8, gt_reg_mask_f7, gt_reg_mask_f4, \
-    #     gt_reg_mask_f3, gt_seg_mask
-    gt_cls_mask_f11 = init_CPD_mask([1, 4, 4, 1], 32, 'cls')
-    gt_cls_mask_f10 = init_CPD_mask([1, 6, 6, 1], 32, 'cls')
-    gt_cls_mask_f9 = init_CPD_mask([1, 8, 8, 1], 32, 'cls')
-    gt_cls_mask_f8 = init_CPD_mask([1, 16, 16, 1], 32, 'cls')
-    gt_cls_mask_f7 = init_CPD_mask([1, 32, 32, 1], 32, 'cls')
-    gt_cls_mask_f4 = init_CPD_mask([1, 64, 64, 1], 32, 'cls')
-    gt_cls_mask_f3 = init_CPD_mask([1, 128, 128, 1], 48, 'cls')
+    global gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9, gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, \
+        gt_cls_mask_f3, gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9, gt_reg_mask_f8, gt_reg_mask_f7, gt_reg_mask_f4, \
+        gt_reg_mask_f3, gt_seg_mask
 
-    gt_reg_mask_f11 = init_CPD_mask([1, 4, 4, 1], 64, 'reg')
-    gt_reg_mask_f10 = init_CPD_mask([1, 6, 6, 1], 64, 'reg')
-    gt_reg_mask_f9 = init_CPD_mask([1, 8, 8, 1], 64, 'reg')
-    gt_reg_mask_f8 = init_CPD_mask([1, 16, 16, 1], 64, 'reg')
-    gt_reg_mask_f7 = init_CPD_mask([1, 32, 32, 1], 64, 'reg')
-    gt_reg_mask_f4 = init_CPD_mask([1, 64, 64, 1], 64, 'reg')
-    gt_reg_mask_f3 = init_CPD_mask([1, 128, 128, 1], 96, 'reg')
-
-    gt_seg_mask = init_CPD_mask([1, 512, 512, 1], 4, 'seg')
     gt_rects = gt_array2gt_rects(gt_array)
+    default_boxes_f = list()
+    position_f = list()
+    gt_rects_f = list()
+    gt_boxes = list()
+    scale_list_f = list()
+    cls_maps = [copy.deepcopy(gt_cls_mask_f11), copy.deepcopy(gt_cls_mask_f10), copy.deepcopy(gt_cls_mask_f9),
+                copy.deepcopy(gt_cls_mask_f8), copy.deepcopy(gt_cls_mask_f7), copy.deepcopy(gt_cls_mask_f4),
+                copy.deepcopy(gt_cls_mask_f3)]
+    reg_maps = [copy.deepcopy(gt_reg_mask_f11), copy.deepcopy(gt_reg_mask_f10), copy.deepcopy(gt_reg_mask_f9),
+                copy.deepcopy(gt_reg_mask_f8), copy.deepcopy(gt_reg_mask_f7), copy.deepcopy(gt_reg_mask_f4),
+                copy.deepcopy(gt_reg_mask_f3)]
+    map_size_table = [4, 6, 8, 16, 32, 64, 128]
+    scale_table = [[184, 208, 232, 256],
+                   [124, 136, 148, 160],
+                   [88, 96, 104, 112],
+                   [56, 64, 72, 80],
+                   [36, 40, 44, 48],
+                   [20, 24, 28, 32],
+                   [4, 8, 6, 10, 12, 16]]
+    strides = [128, 85.3333, 64, 32, 16, 8, 4]
     for gt_rect in gt_rects:
-        gt_cls_mask_f11, gt_reg_mask_f11 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f11, gt_reg_mask_f11,
-                                                                      [184, 208, 232, 256], 128, gt_rect[4])
-        for ss in range(16):
-            if np.max(gt_cls_mask_f11[:,:,:,ss*2+1])>0:
-                a=1
-        gt_cls_mask_f10, gt_reg_mask_f10 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f10, gt_reg_mask_f10,
-                                                                      [124, 136, 148, 160], 85.33333, gt_rect[4])
-        gt_cls_mask_f9, gt_reg_mask_f9 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f9, gt_reg_mask_f9,
-                                                                    [88, 96, 104, 112], 64, gt_rect[4])
-        gt_cls_mask_f8, gt_reg_mask_f8 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f8, gt_reg_mask_f8,
-                                                                    [56, 64, 72, 80], 32, gt_rect[4])
-        gt_cls_mask_f7, gt_reg_mask_f7 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f7, gt_reg_mask_f7,
-                                                                    [36, 40, 44, 48], 16, gt_rect[4])
-        gt_cls_mask_f4, gt_reg_mask_f4 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f4, gt_reg_mask_f4,
-                                                                    [20, 24, 28, 32], 8, gt_rect[4])
-        gt_cls_mask_f3, gt_reg_mask_f3 = gadget.project_feature_map(gt_rect[0:4], gt_cls_mask_f3, gt_reg_mask_f3,
-                                                                    [4, 8, 6, 10, 12, 16], 4, gt_rect[4])
+        for map_index in range(7):  # 7 different resolving map from f11 to f3
+            default_boxes, position, gt_re, gt_box, scale_list = \
+                gadget.project_feature_map_simple(gt_rect[0:4],
+                                                  map_size_table[map_index],
+                                                  map_size_table[map_index],
+                                                  scale_table[map_index],
+                                                  strides[map_index],
+                                                  gt_rect[4],
+                                                  map_index)
+            default_boxes_f += default_boxes
+            position_f += position
+            gt_rects_f += gt_re
+            gt_boxes += gt_box
+            scale_list_f += scale_list
 
-    gt_seg_mask = gadget.project_feature_map_seg(gt_array, gt_seg_mask)
+    # test
+    iou_matrix = gadget.calcul_matrix_iou(np.array(default_boxes_f), np.array(gt_boxes))
+    cls_maps, reg_maps = gadget.project_feature_map_iou(cls_maps, reg_maps, np.array(default_boxes_f),
+                                                        np.array(iou_matrix),
+                                                        np.array(position_f), np.array(gt_rects_f),
+                                                        np.array(scale_list_f))
+    gt_seg_mask_counterpart = gadget.project_feature_map_seg(gt_array, copy.deepcopy(gt_seg_mask))
 
-    return {'cls_mask': [gt_cls_mask_f11, gt_cls_mask_f10, gt_cls_mask_f9,
-                         gt_cls_mask_f8, gt_cls_mask_f7, gt_cls_mask_f4, gt_cls_mask_f3],
-            'reg_mask': [gt_reg_mask_f11, gt_reg_mask_f10, gt_reg_mask_f9,
-                         gt_reg_mask_f8, gt_reg_mask_f7, gt_reg_mask_f4, gt_reg_mask_f3],
-            'seg_mask': [gt_seg_mask]}
+    return {'cls_mask': cls_maps,
+            'reg_mask': reg_maps,
+            'seg_mask': [gt_seg_mask_counterpart]}
