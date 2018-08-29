@@ -17,6 +17,12 @@ import time
 CPD_mat = sio.loadmat('./data/img_data/gt.mat')
 sampling_list = range(CPD_mat['imnames'].shape[1])
 random.shuffle(sampling_list)
+train_sampling_list = sampling_list[:-100000]
+val_sampling_list = sampling_list[-100000:-1]
+
+
+def random_list():
+    random.shuffle(train_sampling_list)
 
 
 def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, filename=None):
@@ -30,12 +36,14 @@ def get_sample_tensor(model_name, sess=None, propose=None, batch_size=None, file
             for i in range(batch_size[0], batch_size[1]):
                 img = cv2.imread(
                     join('/home/cj3/Downloads/im/SynthText',
-                         CPD_mat['imnames'][0][sampling_list[i]][0].encode('gb18030')))
+                         CPD_mat['imnames'][0][train_sampling_list[i] if filename == 'train' else
+                         val_sampling_list[i]][0].encode('gb18030')))
                 img_height, img_width = img.shape[0:2]
                 img = cv2.resize(img, (512, 512))
                 img = img[np.newaxis, :]
 
-                gt_array = copy.deepcopy(CPD_mat['wordBB'][0][sampling_list[i]])
+                gt_array = copy.deepcopy(CPD_mat['wordBB'][0][train_sampling_list[i] if filename == 'train' else
+                val_sampling_list[i]])
                 gt_array[0] = gt_array[0] * 512. / img_width
                 gt_array[1] = gt_array[1] * 512. / img_height
                 gt_array.astype(np.int32)

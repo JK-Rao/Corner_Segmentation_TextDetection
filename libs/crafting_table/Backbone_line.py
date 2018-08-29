@@ -6,6 +6,7 @@
 
 from .assembly_line import AssemblyLine
 from ..logger.factory import get_sample_tensor
+from ..logger.factory import random_list
 import tensorflow as tf
 import numpy as np
 import time
@@ -141,10 +142,10 @@ class Backbone_line(AssemblyLine):
                     net = get_network('CSTR', global_reuse=False if i == 0 else True)
                     nets.append(net)
                     loss_dict = net.structure_loss()
-                    loss =loss_dict['cls loss'] + 0*loss_dict['reg loss'] + 0 * loss_dict['seg loss']
+                    loss =loss_dict['cls loss'] + loss_dict['reg loss'] + net.lamd * loss_dict['seg loss']
                     # loss = loss_dict['cls loss']
                     if i ==0:
-                        test_loss = loss
+                        test_loss = [loss_dict['cls loss'] , loss_dict['reg loss'] , net.lamd * loss_dict['seg loss']]
                     grads = opti.compute_gradients(loss)
                     tower_grads.append(grads)
 
@@ -168,80 +169,89 @@ class Backbone_line(AssemblyLine):
                        [20, 24, 28, 32],
                        [4, 8, 6, 10, 12, 16]]
 
-        merged = self.create_summary(nets[0].get_summary(), './data/logs/log_CSTR_2_cls_lr:0.0001_zero')
-        for iter in range(90000):
-            feed_dict_val = None
-            if iter % 10 == 0:
-                print('val testing...')
-                feed_dict_val = dict()
-                Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[self.batch_size * 1000 + iter * self.val_size,
-                                                                          self.batch_size * 1000 + iter * self.val_size \
-                                                                          + self.val_size])
+        merged = self.create_summary(nets[0].get_summary(), './data/logs/log_CSTR_2_cls_lr:ful_loss')
+        for ep in range(10):
+            random_list()
+            for iter in range(85000):
+                feed_dict_val = None
+                if iter % 10 == 0:
+                    print('val testing...')
+                    feed_dict_val = dict()
 
-                # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
-                if X_val_mb is None:
-                    continue
-                actually_batch_size = X_val_mb.shape[0]
+                    Y_val_mb, X_val_mb = get_sample_tensor('CPD', batch_size=[iter/10 * self.val_size,
+                                                                              iter/10 * self.val_size + self.val_size],
+                                                           filename='val')
 
-                Y_val_mb_flatten = flatten_concat(Y_val_mb)
-                feed_dict_val[nets[0].X] = X_val_mb
-                feed_dict_val[nets[0].Ycls] = Y_val_mb_flatten['cls_data']
-                feed_dict_val[nets[0].Yreg] = Y_val_mb_flatten['reg_data']
-                feed_dict_val[nets[0].Yseg] = Y_val_mb_flatten['seg_data']
-                feed_dict_val[nets[0].on_train] = False
-                feed_dict_val[nets[0].batch_size] = actually_batch_size
+                    # self.artificial_check(X_val_mb, Y_val_mb, scale_table)
+                    if X_val_mb is None:
+                        continue
+                    actually_batch_size = X_val_mb.shape[0]
 
-                los_cls, los_reg, los_seg, mg \
-                    = self.sess.run([test_loss,
-                                     test_loss,
-                                     test_loss,
-                                     merged],
-                                    feed_dict=feed_dict_val)
-                self.iter_num = iter
-                self.write_summary(mg)
-                print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
-                      % (iter, (los_cls + los_reg + los_seg), los_cls, los_reg,
-                         los_seg))
+                    Y_val_mb_flatten = flatten_concat(Y_val_mb)
+                    feed_dict_val[nets[0].X] = X_val_mb
+                    feed_dict_val[nets[0].Ycls] = Y_val_mb_flatten['cls_data']
+                    feed_dict_val[nets[0].Yreg] = Y_val_mb_flatten['reg_data']
+                    feed_dict_val[nets[0].Yseg] = Y_val_mb_flatten['seg_data']
+                    feed_dict_val[nets[0].on_train] = False
+                    feed_dict_val[nets[0].batch_size] = actually_batch_size
 
-            # training scope
-            print('opti iter%d...' % iter)
-            t_iter_start = time.time()
-            stretch = self.batch_size
-            while True:
-                Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size + offset,
-                                                                              iter * self.batch_size + stretch + offset])
-                # break
-                if X_train_mb is None:
-                    continue
-                actually_batch_size = X_train_mb.shape[0]
-                if actually_batch_size < self.batch_size:
-                    stretch += self.batch_size - actually_batch_size
-                    print('Error!!!!!!!!!!!!!')
-                    continue
-                break
+                    los_cls, los_reg, los_seg, mg \
+                        = self.sess.run([test_loss[0],
+                                         test_loss[1],
+                                         test_loss[2],
+                                         merged],
+                                        feed_dict=feed_dict_val)
+                    self.iter_num = iter
+                    self.write_summary(mg)
+                    print('iter step:%d total loss:%f cls loss:%f,reg loss:%f,seg loss:%f'
+                          % (iter, (los_cls + los_reg + los_seg), los_cls, los_reg,
+                             los_seg))
 
-            feed_dict = dict()
-            # self.artificial_check(X_train_mb,Y_train_mb,scale_table)
-            for device_id in range(device_num):
-    # test = init_template_f_in(scale_table, [128, 85.3333, 64, 32, 16, 8, 4])
-                Y_tain_mb_flatten = flatten_concat(Y_train_mb[device_id * self.solo_batch_size:
-                                                              (device_id + 1) * self.solo_batch_size])
-                # print(np.sum(Y_tain_mb_flatten['cls_data'][:,1]))
-                feed_dict[nets[device_id].X] = X_train_mb[device_id * self.solo_batch_size:
-                                                          (device_id + 1) * self.solo_batch_size]
-                feed_dict[nets[device_id].Ycls] = Y_tain_mb_flatten['cls_data']
-                feed_dict[nets[device_id].Yreg] = Y_tain_mb_flatten['reg_data']
-                feed_dict[nets[device_id].Yseg] = Y_tain_mb_flatten['seg_data']
-                feed_dict[nets[device_id].on_train] = True
-                feed_dict[nets[device_id].batch_size] = self.solo_batch_size
+                # training scope
+                print('opti iter%d...' % iter)
+                t_iter_start = time.time()
+                stretch = self.batch_size
+                while True:
+                    Y_train_mb, X_train_mb = get_sample_tensor('CPD', batch_size=[iter * self.batch_size + offset,
+                                                                                  iter * self.batch_size + stretch + offset],
+                                                               filename='train')
+                    # break
+                    if X_train_mb is None:
+                        continue
+                    actually_batch_size = X_train_mb.shape[0]
+                    if actually_batch_size < self.batch_size:
+                        stretch += self.batch_size - actually_batch_size
+                        print('Error!!!!!!!!!!!!!')
+                        continue
+                    break
 
-            t_iter_pre_opti = time.time()
-            _, train_loss = self.sess.run([apply_gradinet_op, test_loss], feed_dict=feed_dict)
-            print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
-                  % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
-            print('optimizer update successful, iter:%d loss:%f'
-                  % (iter, train_loss))
-            a = 1
+                feed_dict = dict()
+                # self.artificial_check(X_train_mb,Y_train_mb,scale_table)
+                for device_id in range(device_num):
+        # test = init_template_f_in(scale_table, [128, 85.3333, 64, 32, 16, 8, 4])
+                    Y_tain_mb_flatten = flatten_concat(Y_train_mb[device_id * self.solo_batch_size:
+                                                                  (device_id + 1) * self.solo_batch_size])
+                    # print(np.sum(Y_tain_mb_flatten['cls_data'][:,1]))
+                    feed_dict[nets[device_id].X] = X_train_mb[device_id * self.solo_batch_size:
+                                                              (device_id + 1) * self.solo_batch_size]
+                    feed_dict[nets[device_id].Ycls] = Y_tain_mb_flatten['cls_data']
+                    feed_dict[nets[device_id].Yreg] = Y_tain_mb_flatten['reg_data']
+                    feed_dict[nets[device_id].Yseg] = Y_tain_mb_flatten['seg_data']
+                    feed_dict[nets[device_id].on_train] = True
+                    feed_dict[nets[device_id].batch_size] = self.solo_batch_size
+
+                t_iter_pre_opti = time.time()
+                # train_loss = self.sess.run(test_loss[0]+test_loss[1]+test_loss[2],
+                #                               feed_dict=feed_dict)
+                self.sess.run(apply_gradinet_op,
+                              feed_dict=feed_dict)
+                # train_loss = self.sess.run(test_loss[0]+test_loss[1]+test_loss[2],
+                #                               feed_dict=feed_dict)
+                print('optimizer update successful, total spend:%fs and opti spend:%fs this time...'
+                      % ((time.time() - t_iter_start), (time.time() - t_iter_pre_opti)))
+                # print('optimizer update successful, iter:%d loss:%f'
+                #       % (iter, train_loss))
+                a = 1
         self.close_summary_writer()
 
     # scale_table = [[256, 232, 208, 184],
